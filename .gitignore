@@ -1,0 +1,11 @@
+.env
+__pycache__
+.claude
+.mypy_cache
+.pgdata
+.ruff_cache
+.venv
+node_modules/
+assistant.py
+working_assistant.py
+main.py
