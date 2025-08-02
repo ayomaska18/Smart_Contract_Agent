@@ -300,4 +300,4 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
         }
 
 if __name__ == '__main__':
-    mcp.run(transport="http", port=8081)
+    mcp.run(transport="http", host="0.0.0.0", port=8081)

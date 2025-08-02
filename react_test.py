@@ -33,7 +33,7 @@ openai_model = os.getenv('OPENAI_MODEL')
 mcp_server_url = os.getenv('mcp_server_url')
 
 postgres_event_store = EventStorePostgres(
-    db_url="postgresql://postgres:postgres@localhost:5432/grafi_test_db",
+    db_url="postgresql+psycopg2://testing:testing@postgres:5432/grafi_test_db"
 )
 
 container.register_event_store(postgres_event_store)

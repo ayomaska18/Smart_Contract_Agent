@@ -302,7 +302,7 @@ version = "3.22.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
-    { name = "docstring-parser", marker = "python_full_version < '4'" },
+    { name = "docstring-parser", marker = "python_full_version < '4.0'" },
     { name = "rich" },
     { name = "rich-rst" },
 ]
@@ -634,7 +634,6 @@ dependencies = [
     { name = "py-solc-x" },
     { name = "pycountry" },
     { name = "python-dotenv" },
-    { name = "requests" },
     { name = "ruff" },
     { name = "sqlalchemy" },
     { name = "web3" },
@@ -651,7 +650,6 @@ requires-dist = [
     { name = "py-solc-x", specifier = ">=2.0.4" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
-    { name = "requests", specifier = ">=2.32.4" },
     { name = "ruff", specifier = ">=0.12.5" },
     { name = "sqlalchemy", specifier = ">=2.0.42" },
     { name = "web3", specifier = ">=7.12.1" },

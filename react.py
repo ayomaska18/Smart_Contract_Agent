@@ -26,6 +26,8 @@ class SmartContractAssistant(ReActAgent):
     async def _build_with_mcp(self):
         """Build the assistant with MCP server integration using official method"""
         try:
+            # Give server time to start up
+            await asyncio.sleep(2)
             mcp_config = {
                 "smart-contract-server": StreamableHttpConnection({
                     "url": self.mcp_server_url,
@@ -61,6 +63,7 @@ class SmartContractAssistant(ReActAgent):
             return False
 
     def get_input(self, question: str, invoke_context: Optional[InvokeContext] = None) -> tuple[list[Message], InvokeContext]:
+        # maintain the workflow state
         if invoke_context is None:
             print("Creating new InvokeContext with default conversation id for SmartContractAssistant")
             invoke_context = InvokeContext(

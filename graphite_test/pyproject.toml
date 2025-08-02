@@ -14,7 +14,6 @@ dependencies = [
     "py-solc-x>=2.0.4",
     "pycountry>=24.6.1",
     "python-dotenv>=1.1.1",
-    "requests>=2.32.4",
     "ruff>=0.12.5",
     "sqlalchemy>=2.0.42",
     "web3>=7.12.1",
