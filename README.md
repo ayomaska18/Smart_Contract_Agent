@@ -21,8 +21,6 @@ Instructions:
    OPENAI_SYSTEM_MESSAGE=your_key_here <br/>
    OPENAI_MODEL=your_key_here <br/>
 
-5. Run the server <br/>
-   uv run server.py
+5. Run Docker <br/>
+   docker-compose up --build
 
-6. Run the client to test <br/>
-   uv run react_test.py
