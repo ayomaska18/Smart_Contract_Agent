@@ -24,3 +24,7 @@ Instructions:
 5. Run Docker <br/>
    docker-compose up --build
 
+6. Run agent <br/>
+   uv run src/agents/react_test.py
+
+
