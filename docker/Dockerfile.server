@@ -29,4 +29,4 @@ COPY . .
 
 EXPOSE 8081
 
-CMD ["uv", "run", "server.py"]
+CMD ["uv", "run", "src/servers/server.py"]

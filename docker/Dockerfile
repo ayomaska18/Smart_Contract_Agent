@@ -21,4 +21,4 @@ RUN uv sync
 
 COPY . .
 
-CMD ["uv", "run", "react_test.py"]
+CMD ["uv", "run", "src/agents/react_test.py"]

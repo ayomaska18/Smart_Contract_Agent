@@ -1,6 +1,8 @@
 import os
 import uuid
 import asyncio
+import sys
+import os
 from typing import AsyncGenerator
 from typing import Optional, Self, Dict
 from dotenv import load_dotenv
@@ -33,7 +35,7 @@ openai_model = os.getenv('OPENAI_MODEL')
 mcp_server_url = os.getenv('mcp_server_url')
 
 postgres_event_store = EventStorePostgres(
-    db_url="postgresql+psycopg2://testing:testing@postgres:5432/grafi_test_db"
+    db_url="postgresql+psycopg2://testing:testing@localhost:5432/grafi_test_db"
 )
 
 container.register_event_store(postgres_event_store)
@@ -51,6 +53,42 @@ Response in a concise and clear manner, ensuring that your answers are accurate 
 """
 
 CONVERSATION_ID = uuid.uuid4().hex
+
+def get_conversation_context(conversation_id: str) -> list[Message]:
+    """
+    Retrieve conversation messages from event store for context.
+    Removes duplicates and filters incomplete tool call sequences.
+    """
+    events = event_store.get_conversation_events(conversation_id)
+    messages = []
+    
+    for event in events:
+        if hasattr(event, 'data'):
+            if isinstance(event.data, list):
+                # Handle list of messages
+                for item in event.data:
+                    if isinstance(item, Message):
+                        messages.append(item)
+            elif isinstance(event.data, Message):
+                # Handle single message
+                messages.append(event.data)
+    
+    # Sort messages by timestamp to maintain order
+    messages.sort(key=lambda m: m.timestamp if hasattr(m, 'timestamp') else 0)
+    
+    # Remove duplicate messages (same message_id and timestamp)
+    seen_messages = set()
+    deduped_messages = []
+    for msg in messages:
+        # Create unique key from message_id and timestamp
+        key = (msg.message_id, msg.timestamp, msg.role, msg.content)
+        if key not in seen_messages:
+            seen_messages.add(key)
+            deduped_messages.append(msg)
+    
+    print(f"DEBUG: After deduplication: {len(deduped_messages)} messages (was {len(messages)})")
+    
+    return deduped_messages
 
 class SmartContractAssistant(Assistant):
     oi_span_type: OpenInferenceSpanKindValues = Field(
@@ -227,29 +265,90 @@ async def create_assistant():
     )
     return assistant
 
-async def main():
-    assistant = await create_assistant()
+async def run_interactive_mode():
+    print("=== Smart Contract Assistant - Interactive Mode ===")
+    print("Type 'quit' or 'exit' to stop")
+    print("Type 'new' to start a new conversation")
+    print("Type 'history' to see conversation history")
+    print("="*50)
 
-    invoke_context = InvokeContext(
-        conversation_id=uuid.uuid4().hex,
-        invoke_id=uuid.uuid4().hex,
-        assistant_request_id=uuid.uuid4().hex,
-    )
-
-    question = "Can you give generate me a erc20 token with name test, and symbol TEST?"
-    input_data = [Message(role="user", content=question)]
-
-    async for response in assistant.a_invoke(invoke_context, input_data):
-        print("Assistant output:")
-        for output in response:
-            print(output.content)
+    try:
+        assistant = await create_assistant()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return
     
-    events = event_store.get_conversation_events(invoke_context.conversation_id)
+    conversation_id = uuid.uuid4().hex
+    print(f"Started conversation: {conversation_id[:8]}...")
+    print()
+    
+    while True:
+        try:
+            user_input = input("You: ").strip()
+            
+            if user_input.lower() in ['quit', 'exit']:
+                print("Goodbye!")
+                break
+            
+            if user_input.lower() == 'new':
+                conversation_id = uuid.uuid4().hex
+                print(f"Started new conversation: {conversation_id[:8]}...")
+                continue
+            
+            if user_input.lower() == 'history':
+                history = get_conversation_context(conversation_id)
+                print(f"Conversation history ({len(history)} messages):")
+                for i, msg in enumerate(history[-10:], 1): 
+                    role = msg.role.capitalize()
+                    content = msg.content[:100] + "..." if msg.content and len(msg.content) > 100 else msg.content
+                    print(f"  {i}. {role}: {content}")
+                continue
+            
+            if not user_input:
+                continue
+            
+            invoke_context = InvokeContext(
+                conversation_id=conversation_id,  
+                invoke_id=uuid.uuid4().hex,
+                assistant_request_id=uuid.uuid4().hex,
+            )
+            
+            conversation_history = get_conversation_context(conversation_id)
+            
+            print(f"\nDEBUG: Conversation history ({len(conversation_history)} messages):")
+            for i, msg in enumerate(conversation_history[-10:], 1): 
+                role = msg.role
+                has_tool_calls = "tool_calls" if msg.tool_calls else "no_calls"
+                tool_call_id = f"tool_call_id:{msg.tool_call_id}" if msg.tool_call_id else "no_id"
+                content_preview = (msg.content[:50] + "...") if msg.content else "None"
+                print(f"  {i}. {role} | {has_tool_calls} | {tool_call_id} | {content_preview}")
+            
+            input_data = conversation_history + [Message(role="user", content=user_input)]
+            
+            print(f"\nSending {len(input_data)} messages to assistant...")
+            
+            print("Assistant: ", end="", flush=True)
+            response_parts = []
+            
+            async for response in assistant.a_invoke(invoke_context, input_data):
+                for output in response:
+                    if output.content:
+                        response_parts.append(output.content)
+                        print(output.content)
+            
+            if not response_parts:
+                print("No response generated.")
+            
+            print()
+            
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"Error: {e}")
 
-    print(f"Events for conversation {invoke_context.conversation_id}:")
-    print(f"Events: {events} ")
-
-    return assistant
-
+async def main():
+    await run_interactive_mode()
+            
 if __name__ == "__main__":
     asyncio.run(main())

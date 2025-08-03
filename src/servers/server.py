@@ -52,7 +52,7 @@ async def generate_contract(
     if mintable:
         ownable = True
 
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader("src"))
     template = env.get_template("contracts/erc20.sol")
     solidity_code = template.render(
         CONTRACT_NAME=contract_name,
