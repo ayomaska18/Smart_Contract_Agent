@@ -1,4 +1,4 @@
-/* Chat Container Styles */
+/* Chat Container Styles - Updated */
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -167,13 +167,19 @@
   margin-bottom: 8px;
 }
 
-.final-answer {
+.final-answer-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #059669;
+  color: #3b82f6;
   font-weight: 500;
   margin-bottom: 8px;
+}
+
+.final-answer-content {
+  color: #374151;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .message-text {
