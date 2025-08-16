@@ -4,6 +4,8 @@ import os
 import json
 import solcx
 import uuid
+import sqlite3
+from datetime import datetime
 from dotenv import load_dotenv
 from fastmcp import FastMCP, Client, Context
 from jinja2 import Environment, FileSystemLoader
@@ -38,8 +40,62 @@ mcp = FastMCP(name="crypto_mcp", log_level="DEBUG")
 mcp.add_middleware(LoggingMiddleware())
 
 @mcp.tool(
+    name="generate_erc20_contract",
+    description="Generate an ERC20 token contract with advanced features"
+)
+async def generate_erc20_contract(
+        contract_name: str = "MyToken", 
+        token_name: str = "MyToken", 
+        token_symbol: str = "MTK",
+        initial_supply: int = 0,
+        decimals: int = 18,
+        mintable: bool = False,
+        burnable: bool = False,
+        pausable: bool = False,
+        permit: bool = False,
+        ownable: bool = False,
+        capped: bool = False,
+        max_supply: int = 0
+    ) -> dict:
+    
+    # Auto-enable ownable for features that require it
+    if mintable or pausable or capped:
+        ownable = True
+
+    env = Environment(loader=FileSystemLoader("/app/src"))
+    template = env.get_template("contracts/erc20.sol")
+    solidity_code = template.render(
+        CONTRACT_NAME=contract_name,
+        TOKEN_NAME=token_name,
+        TOKEN_SYMBOL=token_symbol,
+        INITIAL_SUPPLY=initial_supply,
+        DECIMALS=decimals,
+        mintable=mintable,
+        burnable=burnable,
+        pausable=pausable,
+        permit=permit,
+        ownable=ownable,
+        capped=capped,
+        max_supply=max_supply
+    )
+
+    return {
+        "solidity_code": solidity_code,
+        "contract_type": "ERC20",
+        "features": {
+            "mintable": mintable,
+            "burnable": burnable, 
+            "pausable": pausable,
+            "permit": permit,
+            "ownable": ownable,
+            "capped": capped
+        }
+    }
+
+# Keep the old method for backward compatibility
+@mcp.tool(
     name="generate_contract",
-    description="Generate an ERC20 contract with custom name and symbol"
+    description="Generate an ERC20 contract with custom name and symbol (legacy method)"
 )
 async def generate_contract(
         contract_name: str = "MyToken", 
@@ -49,27 +105,63 @@ async def generate_contract(
         ownable: bool = False
     ) -> dict:
     
-    if mintable:
-        ownable = True
+    return await generate_erc20_contract(
+        contract_name=contract_name,
+        token_name=token_name,
+        token_symbol=token_symbol,
+        mintable=mintable,
+        ownable=ownable
+    )
 
-    env = Environment(loader=FileSystemLoader("src"))
-    template = env.get_template("contracts/erc20.sol")
+@mcp.tool(
+    name="generate_erc721_contract",
+    description="Generate an ERC721 NFT contract with advanced features"
+)
+async def generate_erc721_contract(
+        contract_name: str = "MyNFT",
+        token_name: str = "My NFT Collection", 
+        token_symbol: str = "MNFT",
+        base_uri: str = "",
+        mintable: bool = True,
+        burnable: bool = False,
+        enumerable: bool = False,
+        uri_storage: bool = False,
+        ownable: bool = True,
+        royalty: bool = False,
+        royalty_percentage: int = 250,  # 2.5% in basis points
+        max_supply: int = 0  # 0 = unlimited
+    ) -> dict:
+
+    env = Environment(loader=FileSystemLoader("/app/src"))
+    template = env.get_template("contracts/erc721.sol")
     solidity_code = template.render(
         CONTRACT_NAME=contract_name,
         TOKEN_NAME=token_name,
         TOKEN_SYMBOL=token_symbol,
-        mintable = mintable,
-        ownable = ownable
+        base_uri=base_uri,
+        mintable=mintable,
+        burnable=burnable,
+        enumerable=enumerable,
+        uri_storage=uri_storage,
+        ownable=ownable,
+        royalty=royalty,
+        royalty_percentage=royalty_percentage,
+        max_supply=max_supply
     )
 
-    return {"solidity_code": solidity_code}
-
-def resolve_import_remappings(import_path: str):
-    if import_path.startswith("@openzeppelin/"):
-        full_path = os.path.join("node_modules", import_path)
-        with open(full_path, 'r', encoding='utf-8') as f:
-            return {"contents": f.read()}
-    raise FileNotFoundError(f"Cannot resolve import: {import_path}")
+    return {
+        "solidity_code": solidity_code,
+        "contract_type": "ERC721",
+        "features": {
+            "mintable": mintable,
+            "burnable": burnable,
+            "enumerable": enumerable,
+            "uri_storage": uri_storage,
+            "ownable": ownable,
+            "royalty": royalty,
+            "max_supply": max_supply
+        }
+    }
 
 @mcp.tool(
     name="compile_contract",

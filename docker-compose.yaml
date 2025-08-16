@@ -3,9 +3,9 @@ services:
     image: postgres:15
     container_name: postgres15
     environment:
-      POSTGRES_DB: grafi_test_db
-      POSTGRES_USER: testing
-      POSTGRES_PASSWORD: testing
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./.pgdata:/var/lib/postgresql/data
     ports:
@@ -16,13 +16,14 @@ services:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${pg_admin_email}
-      PGADMIN_DEFAULT_PASSWORD: ${pg_admin_password}
+      - PGADMIN_DEFAULT_EMAIL=${pg_admin_email}
+      - PGADMIN_DEFAULT_PASSWORD=${pg_admin_password}
     ports:
       - "5050:80"
     depends_on:
       - postgres
     
+  # MCP Server (Smart Contract Tools)
   mcp_server:
     build:
       context: .
@@ -31,29 +32,53 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./src/contracts:/app/src/contracts
+      - ./services/mcp_server/src/contracts:/app/src/contracts
       - ./node_modules:/app/node_modules
     environment:
       - metamask_private_key=${metamask_private_key}
       - ethereum_sepolia_rpc=${ethereum_sepolia_rpc}
-      - wallet_address=${wallet_address} 
+      - wallet_address=${wallet_address}
+    networks:
+      - graphite_network
   
-  # client:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Dockerfile
-  #   container_name: grafi_client
-  #   depends_on:
-  #     postgres:
-  #       condition: service_started
-  #     mcp_server:
-  #       condition: service_started
-  #   volumes:
-  #     - .:/app
-  #     - /app/.venv
-  #   working_dir: /app
-  #   environment:
-  #     - PYTHONPATH=/app
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - OPENAI_MODEL=${OPENAI_MODEL}
-  #     - mcp_server_url=${mcp_server_url}
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: backend_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mcp_server
+      - postgres
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - mcp_server_url=${MCP_SERVER_URL}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=postgres
+    networks:
+      - graphite_network
+  
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: frontend_app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_API_URL=${BACKEND_API_URL}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    networks:
+      - graphite_network
+
+networks:
+  graphite_network:
+    driver: bridge

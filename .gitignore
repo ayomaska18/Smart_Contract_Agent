@@ -8,4 +8,10 @@ __pycache__
 node_modules/
 assistant.py
 working_assistant.py
-main.py
+GRAFI_DEV_SETUP.md
+mcp_improvements.md
+NEXTJS_MIGRATION.md
+PRODUCTION_READY_RECOMMENDATIONS.md
+simple_contract_test.py
+state_management.md
+CLAUDE.md
