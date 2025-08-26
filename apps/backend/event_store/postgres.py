@@ -1,5 +1,5 @@
 from grafi.common.event_stores.event_store_postgres import EventStorePostgres
-from grafi.common.containers.container import container
+from grafi.common.containers.container import container, setup_tracing
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,3 +9,9 @@ postgres_event_store = EventStorePostgres(
 )
 
 container.register_event_store(postgres_event_store)
+
+container.register_tracer(tracer = setup_tracing(
+                collector_endpoint="http://phoenix",
+                collector_port=4317,
+                project_name="grafi-trace",
+            ))

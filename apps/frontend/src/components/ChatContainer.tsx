@@ -4,12 +4,16 @@ import { apiService } from '../services/api';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import ChatHeader from './ChatHeader';
+import { TransactionModal } from './TransactionModal';
 import { AlertCircle } from 'lucide-react';
+import { useAccount } from 'wagmi';
 import { useIsClient } from '../hooks/useIsClient';
+import { useApprovalPolling } from '../hooks/useApprovalPolling';
 import './Chat.css';
 
 const ChatContainer: React.FC = () => {
   const isClient = useIsClient();
+  const { address, isConnected } = useAccount();
   const [chatState, setChatState] = useState<ChatState>(() => ({
     messages: [],
     isLoading: false,
@@ -17,11 +21,67 @@ const ChatContainer: React.FC = () => {
   }));  
   
   const [error, setError] = useState<string | null>(null);
+  const [transactionModal, setTransactionModal] = useState<{
+    isOpen: boolean;
+    transactionData?: any;
+    approvalRequest?: any;
+    mode?: 'transaction' | 'approval';
+  }>({ isOpen: false, transactionData: null, approvalRequest: null, mode: 'transaction' });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Approval polling hook
+  const {
+    approvalRequests,
+    hasActiveRequest,
+    isPolling,
+    startPolling,
+    stopPolling,
+    submitApproval,
+    createMockRequest
+  } = useApprovalPolling(3000); // Poll every 3 seconds
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatState.messages]);
+
+  // Start polling when component mounts
+  useEffect(() => {
+    console.log('🔄 Starting approval polling on component mount');
+    startPolling();
+    
+    return () => {
+      console.log('⏹️ Stopping approval polling on component unmount');
+      stopPolling();
+    };
+  }, [startPolling, stopPolling]);
+
+  // Handle approval requests when they arrive
+  useEffect(() => {
+    if (hasActiveRequest && approvalRequests.length > 0 && !transactionModal.isOpen) {
+      const latestRequest = approvalRequests[0]; // Handle the first/latest request
+      console.log('🔔 New approval request detected:', latestRequest);
+      
+      // Show approval modal
+      setTransactionModal({
+        isOpen: true,
+        approvalRequest: latestRequest,
+        mode: 'approval'
+      });
+
+      // Add a system message about the approval request
+      const approvalMessage: Message = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: '🔔 **Deployment Approval Required**: Please review the transaction details in the modal and approve or reject the deployment.',
+        timestamp: new Date(),
+      };
+
+      setChatState(prev => ({
+        ...prev,
+        messages: [...prev.messages, approvalMessage],
+      }));
+    }
+  }, [hasActiveRequest, approvalRequests, transactionModal.isOpen]);
 
   useEffect(() => {
     if (chatState.messages.length === 0) {
@@ -43,13 +103,281 @@ const ChatContainer: React.FC = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   };
 
+  // Function to detect if a message contains transaction data that needs signing
+  const parseTransactionFromMessage = (content: string) => {
+    try {
+      console.log('Parsing message for transaction data:', content.substring(0, 200) + '...');
+      
+      // Look for MCP server response pattern with transaction data
+      // The prepare_deployment_transaction tool returns this format:
+      // {"success": true, "transaction": {...}, "estimated_gas": ..., "user_address": ...}
+      
+      // Method 1: Look for the transaction preparation signature first
+      if (content.includes('"success":true') && content.includes('"transaction":')) {
+        console.log('Found transaction signature, attempting to extract JSON...');
+        
+        // Find the start and end of the JSON object
+        const startIndex = content.indexOf('{"success":true');
+        if (startIndex !== -1) {
+          // Find the matching closing brace
+          let braceCount = 0;
+          let endIndex = -1;
+          
+          for (let i = startIndex; i < content.length; i++) {
+            if (content[i] === '{') braceCount++;
+            else if (content[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                endIndex = i;
+                break;
+              }
+            }
+          }
+          
+          if (endIndex !== -1) {
+            try {
+              const jsonStr = content.substring(startIndex, endIndex + 1);
+              console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...');
+              const data = JSON.parse(jsonStr);
+              
+              if (data.success && data.transaction && typeof data.transaction === 'object') {
+                console.log('Successfully parsed transaction data:', data);
+                return {
+                  mcpResponse: data,
+                  transaction: {
+                    ...data.transaction,
+                    // Ensure required fields are present
+                    gas: data.transaction.gas || data.estimated_gas || 2000000,
+                    gasPrice: data.transaction.gasPrice || (data.gas_price_gwei ? Math.floor(data.gas_price_gwei * 1e9) : 10e9),
+                    chainId: data.transaction.chainId || data.chain_id || 11155111
+                  }
+                };
+              }
+            } catch (e) {
+              console.log('Failed to parse extracted JSON:', e);
+            }
+          }
+        }
+      }
+      
+      // Method 2: More flexible approach - find any valid JSON object with success and transaction
+      const jsonObjectRegex = /\{(?:[^{}]|{[^{}]*})*\}/g;
+      const jsonObjects = content.match(jsonObjectRegex);
+      
+      if (jsonObjects) {
+        for (const jsonStr of jsonObjects) {
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data && typeof data === 'object' && data.success === true && data.transaction) {
+              console.log('Found flexible transaction data:', data);
+              return {
+                mcpResponse: data,
+                transaction: data.transaction
+              };
+            }
+          } catch (e) {
+            // Skip invalid JSON
+            continue;
+          }
+        }
+      }
+      
+      // Method 2: Look for JSON code blocks with transaction data
+      const jsonBlockMatches = content.match(/```json\s*(\{[\s\S]*?\})\s*```/g);
+      if (jsonBlockMatches) {
+        for (const block of jsonBlockMatches) {
+          try {
+            const jsonContent = block.replace(/```json\s*/, '').replace(/\s*```/, '');
+            const data = JSON.parse(jsonContent);
+            if (data.transaction && data.success) {
+              console.log('Found transaction in JSON block:', data);
+              return {
+                mcpResponse: data,
+                transaction: data.transaction
+              };
+            }
+          } catch (e) {
+            console.log('Failed to parse JSON block:', e);
+            continue;
+          }
+        }
+      }
+      
+      // Method 3: Look for nested transaction objects in text
+      const nestedTransactionPattern = /"transaction":\s*\{[^{}]*"from"[^{}]*"data"[^{}]*"gas"[^{}]*\}/g;
+      const nestedMatches = content.match(nestedTransactionPattern);
+      
+      if (nestedMatches) {
+        for (const match of nestedMatches) {
+          try {
+            const transactionJson = `{${match}}`;
+            const data = JSON.parse(transactionJson);
+            if (data.transaction) {
+              console.log('Found nested transaction:', data.transaction);
+              return {
+                mcpResponse: null,
+                transaction: data.transaction
+              };
+            }
+          } catch (e) {
+            console.log('Failed to parse nested transaction:', e);
+            continue;
+          }
+        }
+      }
+      
+      // Method 4: Look for standalone transaction objects
+      const standaloneTransactionPattern = /\{[^{}]*"from"[^{}]*"data"[^{}]*"gas"[^{}]*"gasPrice"[^{}]*"chainId"[^{}]*\}/g;
+      const standaloneMatches = content.match(standaloneTransactionPattern);
+      
+      if (standaloneMatches) {
+        for (const match of standaloneMatches) {
+          try {
+            const transaction = JSON.parse(match);
+            if (transaction.from && transaction.data && transaction.gas) {
+              console.log('Found standalone transaction:', transaction);
+              return {
+                mcpResponse: null,
+                transaction: transaction
+              };
+            }
+          } catch (e) {
+            console.log('Failed to parse standalone transaction:', e);
+            continue;
+          }
+        }
+      }
+      
+      console.log('No transaction data found in message');
+      return null;
+    } catch (error) {
+      console.error('Error parsing transaction from message:', error);
+      return null;
+    }
+  };
+
+  const handleApprovalSubmit = async (approvalId: string, approved: boolean, signedTxHex?: string, rejectionReason?: string) => {
+    console.log('🔄 Handling approval submission:', { approvalId, approved, hasSignedTx: !!signedTxHex });
+    
+    try {
+      const success = await submitApproval(approvalId, approved, signedTxHex, rejectionReason);
+      
+      if (success) {
+        // Create detailed success message with transaction details
+        let successContent = '';
+        
+        if (approved) {
+          // Get current approval request to access transaction data
+          const currentRequest = approvalRequests.find(req => req.approval_id === approvalId);
+          
+          if (signedTxHex && signedTxHex.startsWith('0x') && signedTxHex.length > 20) {
+            // If we have a transaction hash
+            const isHash = signedTxHex.length === 66; // Standard tx hash length
+            
+            successContent = `✅ **Smart Contract Deployment Successful!**
+
+🎉 **Contract Details:**
+• **Transaction${isHash ? ' Hash' : ''}**: \`${signedTxHex}\`
+• **Network**: ${currentRequest?.transaction_data?.chainId === 11155111 ? 'Sepolia Testnet' : `Chain ID: ${currentRequest?.transaction_data?.chainId}`}
+• **Gas Used**: ${currentRequest?.transaction_data?.gas ? Number(currentRequest?.transaction_data?.gas).toLocaleString() : 'N/A'}
+• **Status**: ✅ Confirmed
+
+🔗 **View on Explorer**: 
+${currentRequest?.transaction_data?.chainId === 11155111 
+  ? `[Sepolia Etherscan](https://sepolia.etherscan.io/${isHash ? 'tx' : 'address'}/${signedTxHex})` 
+  : 'Block explorer link not available'}
+
+Your smart contract has been successfully deployed and is now live on the blockchain! 🚀`;
+          } else {
+            successContent = '✅ **Deployment Approved**: Your deployment has been approved and the transaction has been submitted to the network. Transaction details will be available shortly.';
+          }
+        } else {
+          successContent = `❌ **Deployment Rejected**: ${rejectionReason || 'Deployment was rejected.'}`;
+        }
+        
+        const statusMessage: Message = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: successContent,
+          timestamp: new Date(),
+        };
+
+        setChatState(prev => ({
+          ...prev,
+          messages: [...prev.messages, statusMessage],
+        }));
+
+        // Close modal
+        setTransactionModal({ 
+          isOpen: false, 
+          transactionData: null, 
+          approvalRequest: null, 
+          mode: 'transaction' 
+        });
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('❌ Error handling approval submission:', error);
+      return false;
+    }
+  };
+
+  const handleTransactionConfirmed = async () => {
+    // Send confirmation back to the agent to proceed with user wallet deployment
+    const confirmMessage = `Yes, I confirm the deployment. Please proceed with my wallet.`;
+    
+    // Add user message with confirmation
+    const userMessage: Message = {
+      id: generateMessageId(),
+      role: 'user',
+      content: confirmMessage,
+      timestamp: new Date(),
+    };
+
+    setChatState(prev => ({
+      ...prev,
+      messages: [...prev.messages, userMessage],
+      isLoading: true,
+    }));
+
+    try {
+      const response = await apiService.sendMessage({
+        message: confirmMessage,
+        conversationId: chatState.conversationId ?? undefined,
+      });
+
+      if (response.success && response.data) {
+        const assistantMessage: Message = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: response.data.response,
+          timestamp: new Date(),
+        };
+
+        setChatState(prev => ({
+          ...prev,
+          messages: [...prev.messages, assistantMessage],
+          isLoading: false,
+        }));
+      }
+    } catch (err) {
+      console.error('Error confirming deployment:', err);
+      setError('Failed to confirm deployment');
+      setChatState(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
+
+    // Keep user message as-is (wallet address will be handled by the backend if needed)
+    let enhancedContent = content.trim();
 
     const userMessage: Message = {
       id: generateMessageId(),
       role: 'user',
-      content: content.trim(),
+      content: enhancedContent,
       timestamp: new Date(),
     };
 
@@ -82,7 +410,7 @@ const ChatContainer: React.FC = () => {
         console.log('Sending message with conversation ID:', currentConversationId);
 
         const response = await apiService.sendMessageReal({
-          message: content,
+          message: enhancedContent,
           conversationId: chatState.conversationId ?? undefined,
         });
 
@@ -93,6 +421,66 @@ const ChatContainer: React.FC = () => {
         
         if (response.success && response.data) {
           const backendConversationId = response.data.conversation_id;
+          const assistantResponse = response.data.response;
+
+          // Check if the response contains transaction data that needs signing
+          console.log('Checking for transaction data in response:', assistantResponse.substring(0, 300) + '...');
+          const parsedData = parseTransactionFromMessage(assistantResponse);
+          console.log('Parsed transaction data:', parsedData);
+          
+          // Check for specific transaction preparation indicators (not general deploy mentions)
+          const needsSigning = (assistantResponse.includes("Please sign") || 
+                             assistantResponse.includes("wallet to sign") ||
+                             assistantResponse.includes("Transaction prepared") ||
+                             assistantResponse.includes("prepared for user signing")) &&
+                             // Only show if there's actual transaction data or specific signing request
+                             (parsedData?.transaction || assistantResponse.includes("ready to sign"));
+          
+          console.log('Needs signing detected:', needsSigning);
+          
+          if (parsedData && parsedData.transaction && isConnected && address) {
+            console.log('Showing transaction modal with parsed data:', parsedData);
+            // Show transaction modal for user to sign with actual transaction data
+            setTransactionModal({
+              isOpen: true,
+              transactionData: {
+                ...parsedData.transaction,
+                // Include additional MCP data if available
+                mcpResponse: parsedData.mcpResponse,
+                estimated_gas: parsedData.mcpResponse?.estimated_gas,
+                gas_price_gwei: parsedData.mcpResponse?.gas_price_gwei,
+                user_address: parsedData.mcpResponse?.user_address
+              }
+            });
+          } else if (needsSigning && isConnected && address) {
+            console.log('Detected signing request but no transaction data - asking user to check wallet');
+            // Add a message encouraging user to check their wallet
+            const checkWalletMessage: Message = {
+              id: generateMessageId(),
+              role: 'assistant',
+              content: '🔔 **Transaction Ready**: Please check your connected wallet app (MetaMask) for a transaction notification to sign.',
+              timestamp: new Date(),
+            };
+            
+            setChatState(prev => ({
+              ...prev,
+              messages: [...prev.messages, checkWalletMessage],
+            }));
+          } else if (parsedData && !isConnected) {
+            console.log('Transaction found but wallet not connected');
+            // Prompt user to connect wallet
+            const connectWalletMessage: Message = {
+              id: generateMessageId(),
+              role: 'assistant',
+              content: '⚠️ **Wallet Required**: Please connect your wallet to sign the prepared transaction.',
+              timestamp: new Date(),
+            };
+            
+            setChatState(prev => ({
+              ...prev,
+              messages: [...prev.messages, connectWalletMessage],
+            }));
+          }
 
           const newConversationId = currentConversationId || backendConversationId;
           console.log('Response conversation ID:', backendConversationId);
@@ -106,7 +494,7 @@ const ChatContainer: React.FC = () => {
               conversationId: newConversationId,
               messages: prev.messages.map(msg => 
                 msg.id === assistantMessageId 
-                  ? { ...msg, content: response.data!.response, isStreaming: false }
+                  ? { ...msg, content: assistantResponse, isStreaming: false }
                   : msg
               ),
             };
@@ -132,7 +520,6 @@ const ChatContainer: React.FC = () => {
             ),
           }));
 
-          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
@@ -172,6 +559,25 @@ const ChatContainer: React.FC = () => {
         onNewChat={handleNewChat}
         conversationId={chatState.conversationId}
       />
+
+      {/* Development Helper */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{ padding: '8px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc', fontSize: '12px' }}>
+          <strong>Dev Tools:</strong>
+          <button 
+            onClick={createMockRequest}
+            style={{ marginLeft: '8px', padding: '4px 8px', fontSize: '12px' }}
+          >
+            Create Mock Approval
+          </button>
+          <span style={{ marginLeft: '8px', color: isPolling ? 'green' : 'red' }}>
+            Polling: {isPolling ? 'ON' : 'OFF'}
+          </span>
+          <span style={{ marginLeft: '8px' }}>
+            Active Requests: {approvalRequests.length}
+          </span>
+        </div>
+      )}
       
       {/* Error Banner */}
       {error && (
@@ -211,6 +617,22 @@ const ChatContainer: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Transaction Modal */}
+      <TransactionModal
+        isOpen={transactionModal.isOpen}
+        onClose={() => setTransactionModal({ 
+          isOpen: false, 
+          transactionData: null, 
+          approvalRequest: null, 
+          mode: 'transaction' 
+        })}
+        transactionData={transactionModal.transactionData}
+        approvalRequest={transactionModal.approvalRequest}
+        mode={transactionModal.mode}
+        onConfirm={handleTransactionConfirmed}
+        onApprovalSubmit={handleApprovalSubmit}
+      />
     </div>
   );
 };

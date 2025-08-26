@@ -60,15 +60,40 @@ def create_mcp_function_specs():
     
     deploy_contract_spec = FunctionSpec(
         name="deploy_contract",
-        description="Deploy compiled contract to blockchain network using default gas settings and wallet address",
+        description="Deploy compiled contract to blockchain network using server wallet (legacy method)",
         parameters=ParametersSchema(
             properties={
                 "compilation_id": ParameterSchema(type="string", description="The compilation ID from compile_contract"),
-                "initial_owner": ParameterSchema(type="string", description="Initial owner address (optional, defaults to wallet address)"),
+                "initial_owner": ParameterSchema(type="string", description="Initial owner address (optional, defaults to server wallet address)"),
                 "gas_limit": ParameterSchema(type="integer", description="Gas limit for deployment (optional, default: 2000000)"),
                 "gas_price_gwei": ParameterSchema(type="integer", description="Gas price in Gwei (optional, default: 10)")
             },
             required=["compilation_id"]
+        )
+    )
+
+    prepare_deployment_transaction_spec = FunctionSpec(
+        name="prepare_deployment_transaction",
+        description="Prepare deployment transaction for user wallet signing (preferred method)",
+        parameters=ParametersSchema(
+            properties={
+                "compilation_id": ParameterSchema(type="string", description="The compilation ID from compile_contract"),
+                "user_wallet_address": ParameterSchema(type="string", description="User's wallet address that will sign and pay for the deployment"),
+                "gas_limit": ParameterSchema(type="integer", description="Gas limit for deployment (optional, default: 2000000)"),
+                "gas_price_gwei": ParameterSchema(type="integer", description="Gas price in Gwei (optional, default: 10)")
+            },
+            required=["compilation_id", "user_wallet_address"]
+        )
+    )
+
+    broadcast_signed_transaction_spec = FunctionSpec(
+        name="broadcast_signed_transaction",
+        description="Broadcast user's signed transaction to complete contract deployment",
+        parameters=ParametersSchema(
+            properties={
+                "signed_transaction_hex": ParameterSchema(type="string", description="The signed transaction data from user's wallet in hex format")
+            },
+            required=["signed_transaction_hex"]
         )
     )
 
@@ -93,12 +118,14 @@ def create_mcp_function_specs():
             required=["compilation_id"]
         )
     )
-    
+
     return [
         generate_erc20_spec,
         generate_erc721_spec,
         compile_contract_spec,
         deploy_contract_spec,
+        prepare_deployment_transaction_spec,
+        broadcast_signed_transaction_spec,
         get_abi_spec,
         get_bytecode_spec
     ]

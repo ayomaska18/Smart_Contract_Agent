@@ -55,11 +55,13 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
-      - mcp_server_url=${MCP_SERVER_URL}
+      - MCP_SERVER_URL=${MCP_SERVER_URL}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=postgres
+      - PHOENIX_ENDPOINT=http://phoenix:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:4317
     networks:
       - graphite_network
   
@@ -76,6 +78,39 @@ services:
     environment:
       - BACKEND_API_URL=${BACKEND_API_URL}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+    networks:
+      - graphite_network
+  
+  # # Grafi Development Server (from graphite-dev repo)
+  # grafi_dev:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.grafi-dev
+  #   container_name: grafi_dev_server
+  #   ports:
+  #     - "8888:8888"  # Development server port
+  #   volumes:
+  #     - ./src:/app/src  # Mount source code for hot reload
+  #     - ./apps/backend:/app/backend  # Mount backend code
+  #   environment:
+  #     - NODE_ENV=development
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - OPENAI_MODEL=${OPENAI_MODEL}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_HOST=postgres
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - graphite_network
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"   # Phoenix UI
+      - "4317:4317"   # OTLP gRPC for tracing
     networks:
       - graphite_network
 

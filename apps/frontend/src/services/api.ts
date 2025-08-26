@@ -25,14 +25,13 @@ class ApiService {
   constructor() {
     this.axiosInstance = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
   }
 
-  async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+  private async _sendMessage(request: ChatRequest): Promise<ChatResponse> {
     try {
       const backendRequest = {
         message: request.message,
@@ -71,8 +70,12 @@ class ApiService {
     }
   }
 
+  async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+    return this._sendMessage(request);
+  }
+
   async sendMessageReal(request: ChatRequest): Promise<ChatResponse> {
-    return this.sendMessage(request);
+    return this._sendMessage(request);
   }
 
   async startNewConversation(): Promise<{ conversationId: string }> {
@@ -85,13 +88,40 @@ class ApiService {
     }
   }
 
+  async broadcastSignedTransaction(signedTransactionHex: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      console.log('Broadcasting signed transaction:', signedTransactionHex.substring(0, 20) + '...');
+      
+      const response = await this.axiosInstance.post('/api/transactions/broadcast', {
+        signed_transaction_hex: signedTransactionHex
+      });
+
+      console.log('Broadcast response:', response.data);
+      return response.data;
+
+    } catch (error: any) {
+      console.error('Transaction broadcast error:', error);
+      
+      if (error.response) {
+        const errorMessage = error.response.data?.error || error.message || 'Transaction broadcast failed';
+        return {
+          success: false,
+          error: `Broadcast Error: ${errorMessage}`
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'Failed to broadcast transaction to network'
+      };
+    }
+  }
+
   async *simulateStreamingResponse(message: string): AsyncGenerator<string, void, unknown> {
     yield "THOUGHT: Backend connection failed, running in frontend fallback mode...";
-    await this.delay(1000);
     
     if (message.toLowerCase().includes('contract') || message.toLowerCase().includes('erc20') || message.toLowerCase().includes('erc721')) {
       yield "ACTION_NEEDED: simulate_contract_generation";
-      await this.delay(1500);
       yield `FINAL_ANSWER: ⚠️ **Backend Disconnected - Frontend Fallback Mode**
 
 I'm running in simulation mode because the backend server isn't available.
@@ -125,9 +155,58 @@ Please start the backend server to access the complete functionality!`;
     }
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  // Approval workflow methods
+  async pollApprovalRequests(): Promise<{ has_requests: boolean; requests: any[] }> {
+    try {
+      const response = await this.axiosInstance.get('/api/approval/poll');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error polling approval requests:', error);
+      return { has_requests: false, requests: [] };
+    }
   }
+
+  async submitApprovalResponse(approvalData: {
+    approval_id: string;
+    approved: boolean;
+    signed_transaction_hex?: string;
+    rejection_reason?: string;
+  }): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const response = await this.axiosInstance.post('/api/approval/respond', approvalData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error submitting approval response:', error);
+      
+      if (error.response) {
+        return {
+          success: false,
+          message: 'Failed to submit approval response',
+          error: error.response.data?.error || error.message
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Failed to connect to approval service',
+        error: 'Network error'
+      };
+    }
+  }
+
+  async createMockApprovalRequest(): Promise<{ success: boolean; approval_id?: string; error?: string }> {
+    try {
+      const response = await this.axiosInstance.post('/api/approval/mock-request');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error creating mock approval request:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to create mock request'
+      };
+    }
+  }
+
 }
 
 export const apiService = new ApiService();

@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable standalone output for Docker
+  output: 'standalone',
   // Suppress hydration warnings for browser extension attributes
   experimental: {
     optimizePackageImports: ['lucide-react'],

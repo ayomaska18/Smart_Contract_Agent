@@ -1,11 +1,11 @@
 from grafi.common.models.message import Message
 from grafi.common.containers.container import container
+import json
 
 def extract_and_dedupe_messages(events) -> list[Message]:
     messages = []
     
     for event in events:
-        # Extract from input_data (common in NODE_INVOKE events)
         if hasattr(event, 'input_data'):
             if isinstance(event.input_data, list):
                 for item in event.input_data:
@@ -84,7 +84,6 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
             
             try:
                 # Try to parse tool response
-                import json
                 tool_response = json.loads(msg.content)
                 
                 if tool_response.get("success", True):  # Assume success if no success field
@@ -101,19 +100,45 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
                         
                         summary_msg = Message(
                             role="assistant",
-                            content=f"Successfully generated ERC20 contract '{contract_name}' ({token_name}, symbol: {token_symbol}, initial supply: {initial_supply}). Contract is ready for compilation and deployment."
+                            content=f"Successfully generated ERC20 contract '{contract_name}' ({token_name}, symbol: {token_symbol}, initial_supply: {initial_supply}). Contract code ready. MUST OUTPUT FINAL_ANSWER with the Solidity code now."
                         )
                     elif tool_name == "compile_contract":
                         if tool_response.get("compilation_id"):
                             compilation_id = tool_response['compilation_id']
                             summary_msg = Message(
                                 role="assistant",
-                                content=f"Successfully compiled contract. Compilation ID: {compilation_id}. Ready for deployment."
+                                content=f"Successfully compiled contract. Compilation ID: {compilation_id}. Ready for deployment. MUST OUTPUT FINAL_ANSWER with compilation success and next steps."
                             )
                         else:
                             summary_msg = Message(
                                 role="assistant",
-                                content=f"Compilation failed: {tool_response.get('message', 'Unknown error')}"
+                                content=f"Compilation failed: {tool_response.get('message', 'Unknown error')}. MUST OUTPUT FINAL_ANSWER with error details."
+                            )
+                    elif tool_name == "prepare_deployment_transaction":
+                        if tool_response.get("success", False) and tool_response.get("transaction"):
+                            summary_msg = Message(
+                                role="assistant",
+                                content=f"Deployment transaction prepared successfully. Transaction data ready for user signing. MUST OUTPUT FINAL_ANSWER with transaction details now."
+                            )
+                        else:
+                            error_msg = tool_response.get("message", "Unknown preparation error")
+                            summary_msg = Message(
+                                role="assistant",
+                                content=f"Transaction preparation failed: {error_msg}"
+                            )
+                    elif tool_name == "broadcast_signed_transaction":
+                        if tool_response.get("success", False):
+                            contract_address = tool_response.get("contract_address", "N/A")
+                            tx_hash = tool_response.get("transaction_hash", "N/A")
+                            summary_msg = Message(
+                                role="assistant",
+                                content=f"Successfully broadcast deployment transaction. Contract address: {contract_address} (tx: {tx_hash})"
+                            )
+                        else:
+                            error_msg = tool_response.get("message", "Unknown broadcast error")
+                            summary_msg = Message(
+                                role="assistant",
+                                content=f"Transaction broadcast failed: {error_msg}"
                             )
                     elif tool_name == "deploy_contract":
                         if tool_response.get("success", False) and tool_response.get("contract_address"):
@@ -129,10 +154,20 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
                                 role="assistant",
                                 content=f"Deployment failed: {error_msg}"
                             )
+                    elif tool_name == "generate_erc721_contract" and "solidity_code" in tool_response:
+                        # Extract NFT parameters
+                        contract_name = tool_response.get("contract_name", "Unknown")
+                        token_name = tool_response.get("token_name", "Unknown")
+                        token_symbol = tool_response.get("token_symbol", "UNK")
+                        
+                        summary_msg = Message(
+                            role="assistant",
+                            content=f"Successfully generated ERC721 contract '{contract_name}' ({token_name}, symbol: {token_symbol}). NFT contract code ready. MUST OUTPUT FINAL_ANSWER with the Solidity code now."
+                        )
                     else:
                         summary_msg = Message(
                             role="assistant",
-                            content=f"Successfully completed: {tool_name}"
+                            content=f"Successfully completed: {tool_name}. MUST OUTPUT FINAL_ANSWER with results now."
                         )
                     
                     conversation_flow.append(summary_msg)
@@ -171,7 +206,6 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
         for tool, result in latest_tool_results.items():
             if tool == "generate_erc20_contract":
                 try:
-                    import json
                     parsed = json.loads(result)
                     if "solidity_code" in parsed:
                         # Extract deployment parameters
@@ -185,7 +219,6 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
                     pass
             elif tool == "compile_contract":
                 try:
-                    import json
                     parsed = json.loads(result)
                     if parsed.get("compilation_id"):
                         compilation_id = parsed['compilation_id']
@@ -219,7 +252,6 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
             if msg.role == "tool" and msg.content:
                 # Add tool messages that contain useful data
                 try:
-                    import json
                     tool_data = json.loads(msg.content)
                     if "solidity_code" in tool_data:
                         # This is useful for compilation

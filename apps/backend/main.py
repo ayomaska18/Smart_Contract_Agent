@@ -14,16 +14,27 @@ from grafi.common.models.mcp_connections import StreamableHttpConnection
 from grafi.tools.function_calls.impl.mcp_tool import MCPTool
 from agents.true_react_agent import TrueReActAssistant
 from contextlib import asynccontextmanager
+from tools.mock_tool import SimpleMockTool
 
 import uvicorn
 import sys
 import os
 
-from routers import chat, tools, contracts
+from routers import chat, tools, contracts, transactions, approval
+
+# tool = SimpleMockTool()
+
+# assistant = (TrueReActAssistant.builder()
+#             .name("TrueReActSmartContractAgent")
+#             .model(os.getenv('OPENAI_MODEL', 'gpt-4'))
+#             .api_key(os.getenv("OPENAI_API_KEY", ""))
+#             .function_call_tool(tool)
+#             .build()
+#         )
 
 async def create_react_assistant():
     """Create the True ReAct Assistant with MCP tools"""
-    mcp_server_url = os.getenv('mcp_server_url', 'http://localhost:8081/mcp/')
+    mcp_server_url = os.getenv('MCP_SERVER_URL', 'http://localhost:8081/mcp/')
     print(f"Connecting to MCP server at: {mcp_server_url}")
     
     mcp_config: Dict[str, StreamableHttpConnection] = {
@@ -36,6 +47,7 @@ async def create_react_assistant():
     try:
         print("Building MCP tool...")
         mcp_tool = await MCPTool.builder().connections(mcp_config).a_build()
+        mcp_function_spec = mcp_tool.get_function_specs()
         print("MCP tool built successfully")
         
         print("Building assistant...")
@@ -44,6 +56,7 @@ async def create_react_assistant():
             .model(os.getenv('OPENAI_MODEL', 'gpt-4'))
             .api_key(os.getenv("OPENAI_API_KEY", ""))
             .function_call_tool(mcp_tool)
+            .function_specs(mcp_function_spec)
             .build()
         )
         print("Assistant built successfully")
@@ -64,7 +77,6 @@ async def lifespan(app: FastAPI):
     Use FastAPI lifespan to init/teardown resources.
     Puts the assistant on app.state for access in routes.
     """
-    # Startup
     app.state.assistant = None
     try:
         assistant = await create_react_assistant()
@@ -98,6 +110,8 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(tools.router)
 app.include_router(contracts.router)
+app.include_router(transactions.router)
+app.include_router(approval.router)
 
 @app.get("/")
 async def root():

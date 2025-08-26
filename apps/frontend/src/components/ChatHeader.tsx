@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Settings, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { WalletButton } from './WalletButton';
 
 interface ChatHeaderProps {
   onNewChat: () => void;
@@ -41,6 +42,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ onNewChat, conversationId }) =>
       </div>
       
       <div className="header-actions">
+        <WalletButton />
         <div className="connection-status" title={`Backend ${backendStatus}`}>
           {backendStatus === 'connected' ? (
             <Wifi size={16} style={{ color: '#10b981' }} />
