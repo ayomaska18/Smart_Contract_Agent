@@ -122,7 +122,7 @@ class TrueReActAssistant(Assistant):
                 for msg in msgs if msg.content
             )
         )
-        
+
         reasoning_node = (
             Node.builder()
             .name("ReasoningNode")
@@ -150,9 +150,6 @@ class TrueReActAssistant(Assistant):
             .build()
         )
 
-        
-        
-        
         action_execution_tool = (
             OpenAITool.builder()
             .name("ActionExecutionLLM")

@@ -21,6 +21,15 @@ import sys
 import os
 
 from routers import chat, tools, contracts, transactions, approval
+from grafi.common.containers.container import container, setup_tracing
+from grafi.common.instrumentations.tracing import TracingOptions
+
+tracer = setup_tracing(
+                tracing_options=TracingOptions.PHOENIX,
+                collector_endpoint="phoenix",
+                collector_port=4317,
+                project_name="grafi-trace",
+            )
 
 # tool = SimpleMockTool()
 
