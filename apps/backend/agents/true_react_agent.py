@@ -33,6 +33,13 @@ from grafi.common.models.function_spec import FunctionSpec
 from grafi.common.topics.in_workflow_input_topic import InWorkflowInputTopic
 from grafi.common.topics.in_workflow_output_topic import InWorkflowOutputTopic
 from tools.mock_tool import SimpleMockTool
+from models.agent_responses import (
+    ReasoningResponse, 
+    ActionExecutionResponse, 
+    DeploymentApprovalRequest, 
+    ApprovalResponse,
+    FinalAgentResponse
+)
 
 
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,17 +68,17 @@ class TrueReActAssistant(Assistant):
     model: str = Field(default=lambda: os.getenv('OPENAI_MODEL', 'gpt-4'))
     function_call_tool: Optional[MCPTool] = Field(default=None)
     system_prompt: str = Field(default=REASONING_SYSTEM_PROMPT)
-    function_specs: Optional[List[FunctionSpec]] = Field(default=None)
+    # function_specs: Optional[List[FunctionSpec]] = Field(default=None)
 
     @classmethod
     def builder(cls):
         return TrueReActAssistantBuilder(cls)
 
-    def get_function_specs_from_mcp_tool(self) -> List[FunctionSpec]:
-        """Extract function specs from the MCP tool."""
-        if self.function_call_tool is None:
-            raise ValueError("function_call_tool is required to extract function specs")
-        return self.function_call_tool.function_specs
+    # def get_function_specs_from_mcp_tool(self) -> List[FunctionSpec]:
+    #     """Extract function specs from the MCP tool."""
+    #     if self.function_call_tool is None:
+    #         raise ValueError("function_call_tool is required to extract function specs")
+    #     return self.function_call_tool.function_specs
 
     def _construct_workflow(self):
         if self.function_call_tool is None:
@@ -142,6 +149,9 @@ class TrueReActAssistant(Assistant):
                 .api_key(self.api_key)
                 .model(self.model)
                 .system_message(self.system_prompt)
+                .chat_params({
+                    "response_format": ReasoningResponse
+                })
                 .build()
             )
             .publish_to(reasoning_output_topic)
@@ -156,10 +166,13 @@ class TrueReActAssistant(Assistant):
             .api_key(self.api_key)
             .model(self.model)
             .system_message(ACTION_EXECUTION_PROMPT)
+            .chat_params({
+                "response_format": ActionExecutionResponse
+            })
             .build()
         )
         
-        function_specs = self.get_function_specs_from_mcp_tool()
+        function_specs = self.function_call_tool.function_specs
         action_execution_tool.add_function_specs(function_specs)
         
         action_node = (
@@ -206,6 +219,9 @@ class TrueReActAssistant(Assistant):
                 .api_key(self.api_key)
                 .model(self.model)
                 .system_message(APPROVAL_REQUEST_PROMPT)
+                .chat_params({
+                    "response_format": DeploymentApprovalRequest
+                })
                 .build()
             )
             .tool(self.function_call_tool)
@@ -229,6 +245,9 @@ class TrueReActAssistant(Assistant):
                 .api_key(self.api_key)
                 .model(self.model)
                 .system_message(APPROVAL_RESPONSE_PROMPT)
+                .chat_params({
+                    "response_format": ApprovalResponse
+                })
                 .build()
             )
             .tool(self.function_call_tool)
@@ -262,9 +281,9 @@ class TrueReActAssistantBuilder(AssistantBaseBuilder):
         self.kwargs["function_call_tool"] = function_call_tool
         return self
 
-    def function_specs(self, function_specs: List[FunctionSpec]):
-        self.kwargs["function_specs"] = function_specs
-        return self
+    # def function_specs(self, function_specs: List[FunctionSpec]):
+    #     self.kwargs["function_specs"] = function_specs
+    #     return self
 
     def system_prompt(self, system_prompt: str):
         self.kwargs["system_prompt"] = system_prompt

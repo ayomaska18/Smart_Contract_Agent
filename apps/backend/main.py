@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 from grafi.common.models.mcp_connections import StreamableHttpConnection
 from grafi.tools.function_calls.impl.mcp_tool import MCPTool
-from agents.true_react_agent import TrueReActAssistant
+from agents.react_agent import TrueReActAssistant
 from contextlib import asynccontextmanager
 from tools.mock_tool import SimpleMockTool
 
@@ -20,9 +20,13 @@ import uvicorn
 import sys
 import os
 
-from routers import chat, tools, contracts, transactions, approval
+from routers import chat, tools, contracts, transactions, approval, wallet
 from grafi.common.containers.container import container, setup_tracing
 from grafi.common.instrumentations.tracing import TracingOptions
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+load_dotenv()
 
 tracer = setup_tracing(
                 tracing_options=TracingOptions.PHOENIX,
@@ -62,10 +66,10 @@ async def create_react_assistant():
         print("Building assistant...")
         assistant = (TrueReActAssistant.builder()
             .name("TrueReActSmartContractAgent")
-            .model(os.getenv('OPENAI_MODEL', 'gpt-4'))
+            .model(os.getenv('OPENAI_MODEL', 'gpt-4o'))
             .api_key(os.getenv("OPENAI_API_KEY", ""))
             .function_call_tool(mcp_tool)
-            .function_specs(mcp_function_spec)
+            # .function_specs(mcp_function_spec)
             .build()
         )
         print("Assistant built successfully")
@@ -75,10 +79,6 @@ async def create_react_assistant():
         print(f"Error building MCP tool or assistant: {e}")
         print(f"Error type: {type(e)}")
         raise
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,6 +121,7 @@ app.include_router(tools.router)
 app.include_router(contracts.router)
 app.include_router(transactions.router)
 app.include_router(approval.router)
+app.include_router(wallet.router)
 
 @app.get("/")
 async def root():

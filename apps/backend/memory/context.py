@@ -1,6 +1,40 @@
 from grafi.common.models.message import Message
 from grafi.common.containers.container import container
+from models.agent_responses import FinalAgentResponse, ReasoningResponse, DeploymentApprovalRequest, ApprovalResponse
+from routers.wallet import get_wallet_for_conversation
 import json
+
+def extract_structured_content(msg: Message) -> dict:
+    """Extract both content and structured data from message"""
+    result = {
+        "text_content": None,
+        "structured_data": None,
+        "type": None
+    }
+    
+    if hasattr(msg, 'content') and msg.content:
+        if isinstance(msg.content, FinalAgentResponse):
+            result["structured_data"] = msg.content
+            result["text_content"] = msg.content.summary
+            result["type"] = "final_response"
+        elif isinstance(msg.content, ReasoningResponse):
+            result["structured_data"] = msg.content
+            result["text_content"] = msg.content.reasoning
+            result["type"] = "reasoning"
+        elif isinstance(msg.content, DeploymentApprovalRequest):
+            result["structured_data"] = msg.content
+            result["text_content"] = f"Deployment approval requested for {msg.content.contract_type}"
+            result["type"] = "approval_request"
+        elif isinstance(msg.content, ApprovalResponse):
+            result["structured_data"] = msg.content
+            result["text_content"] = f"Approval {msg.content.approval_status}: {msg.content.reasoning}"
+            result["type"] = "approval_response"
+        else:
+            # Fallback to string content
+            result["text_content"] = str(msg.content)
+            result["type"] = "text"
+    
+    return result
 
 def extract_and_dedupe_messages(events) -> list[Message]:
     messages = []
@@ -67,126 +101,61 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
         if msg.role == "user":
             conversation_flow.append(msg)
             
-        elif msg.role == "assistant" and msg.content and not msg.tool_calls:
-            # This is a final response - include it
-            conversation_flow.append(msg)
-            pending_tool_call = None
+        elif msg.role == "assistant" and msg.content:
+            # Handle structured responses
+            content_info = extract_structured_content(msg)
             
-        elif msg.role == "assistant" and msg.tool_calls:
-            # Track what action was attempted
-            tool_names = [tc.function.name for tc in msg.tool_calls if tc.function]
-            if tool_names:
-                pending_tool_call = tool_names[0]
+            if content_info["type"] == "final_response":
+                # Final agent response - include it
+                final_response = content_info["structured_data"]
+                
+                # Create user-friendly context message
+                context_text = final_response.summary
+                if final_response.results and "solidity_code" in final_response.results:
+                    context_text += f" Generated contract: {final_response.results.get('contract_name', 'Contract')}"
+                if final_response.artifacts:
+                    context_text += f" Artifacts: {', '.join(final_response.artifacts)}"
+                    
+                summary_msg = Message(
+                    role="assistant",
+                    content=context_text
+                )
+                conversation_flow.append(summary_msg)
+                pending_tool_call = None
+                
+            elif content_info["type"] == "reasoning":
+                # Reasoning response - only include if it doesn't require tools
+                reasoning = content_info["structured_data"]
+                if not reasoning.requires_tool_call and not reasoning.requires_deployment:
+                    # This reasoning led to a final output, include context
+                    summary_msg = Message(
+                        role="assistant", 
+                        content=reasoning.reasoning[:200] + "..." if len(reasoning.reasoning) > 200 else reasoning.reasoning
+                    )
+                    conversation_flow.append(summary_msg)
+                    
+            elif content_info["type"] in ["approval_request", "approval_response"]:
+                # Include approval flow messages
+                conversation_flow.append(msg)
+                
+            elif msg.tool_calls:
+                # Track what action was attempted
+                tool_names = [tc.function.name for tc in msg.tool_calls if tc.function]
+                if tool_names:
+                    pending_tool_call = tool_names[0]
             
         elif msg.role == "tool" and msg.content:
-            # Tool response received
+            # Tool response received - store for context but don't add to conversation
+            # The structured final response will handle user communication
             tool_name = pending_tool_call or "unknown_tool"
             
             try:
-                # Try to parse tool response
                 tool_response = json.loads(msg.content)
-                
-                if tool_response.get("success", True):  # Assume success if no success field
-                    # Store the latest successful result for this tool
+                if tool_response.get("success", True):
                     latest_tool_results[tool_name] = msg.content
-                    
-                    # Create context-aware summary
-                    if tool_name == "generate_erc20_contract" and "solidity_code" in tool_response:
-                        # Extract contract parameters for deployment context
-                        contract_name = tool_response.get("contract_name", "Unknown")
-                        token_name = tool_response.get("token_name", "Unknown")
-                        token_symbol = tool_response.get("token_symbol", "UNK")
-                        initial_supply = tool_response.get("initial_supply", 0)
-                        
-                        summary_msg = Message(
-                            role="assistant",
-                            content=f"Successfully generated ERC20 contract '{contract_name}' ({token_name}, symbol: {token_symbol}, initial_supply: {initial_supply}). Contract code ready. MUST OUTPUT FINAL_ANSWER with the Solidity code now."
-                        )
-                    elif tool_name == "compile_contract":
-                        if tool_response.get("compilation_id"):
-                            compilation_id = tool_response['compilation_id']
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Successfully compiled contract. Compilation ID: {compilation_id}. Ready for deployment. MUST OUTPUT FINAL_ANSWER with compilation success and next steps."
-                            )
-                        else:
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Compilation failed: {tool_response.get('message', 'Unknown error')}. MUST OUTPUT FINAL_ANSWER with error details."
-                            )
-                    elif tool_name == "prepare_deployment_transaction":
-                        if tool_response.get("success", False) and tool_response.get("transaction"):
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Deployment transaction prepared successfully. Transaction data ready for user signing. MUST OUTPUT FINAL_ANSWER with transaction details now."
-                            )
-                        else:
-                            error_msg = tool_response.get("message", "Unknown preparation error")
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Transaction preparation failed: {error_msg}"
-                            )
-                    elif tool_name == "broadcast_signed_transaction":
-                        if tool_response.get("success", False):
-                            contract_address = tool_response.get("contract_address", "N/A")
-                            tx_hash = tool_response.get("transaction_hash", "N/A")
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Successfully broadcast deployment transaction. Contract address: {contract_address} (tx: {tx_hash})"
-                            )
-                        else:
-                            error_msg = tool_response.get("message", "Unknown broadcast error")
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Transaction broadcast failed: {error_msg}"
-                            )
-                    elif tool_name == "deploy_contract":
-                        if tool_response.get("success", False) and tool_response.get("contract_address"):
-                            contract_address = tool_response["contract_address"]
-                            tx_hash = tool_response.get("transaction_hash", "N/A")
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Successfully deployed contract at address: {contract_address} (tx: {tx_hash})"
-                            )
-                        else:
-                            error_msg = tool_response.get("message", "Unknown deployment error")
-                            summary_msg = Message(
-                                role="assistant",
-                                content=f"Deployment failed: {error_msg}"
-                            )
-                    elif tool_name == "generate_erc721_contract" and "solidity_code" in tool_response:
-                        # Extract NFT parameters
-                        contract_name = tool_response.get("contract_name", "Unknown")
-                        token_name = tool_response.get("token_name", "Unknown")
-                        token_symbol = tool_response.get("token_symbol", "UNK")
-                        
-                        summary_msg = Message(
-                            role="assistant",
-                            content=f"Successfully generated ERC721 contract '{contract_name}' ({token_name}, symbol: {token_symbol}). NFT contract code ready. MUST OUTPUT FINAL_ANSWER with the Solidity code now."
-                        )
-                    else:
-                        summary_msg = Message(
-                            role="assistant",
-                            content=f"Successfully completed: {tool_name}. MUST OUTPUT FINAL_ANSWER with results now."
-                        )
-                    
-                    conversation_flow.append(summary_msg)
-                else:
-                    # Tool failed
-                    error_msg = tool_response.get("message", "Unknown error")
-                    failure_msg = Message(
-                        role="assistant",
-                        content=f"Action failed ({tool_name}): {error_msg}"
-                    )
-                    conversation_flow.append(failure_msg)
-                    
             except (json.JSONDecodeError, AttributeError):
-                # Fallback for non-JSON responses
-                summary_msg = Message(
-                    role="assistant",
-                    content=f"Completed action: {tool_name}"
-                )
-                conversation_flow.append(summary_msg)
+                # Store raw content for fallback
+                latest_tool_results[tool_name] = msg.content
             
             pending_tool_call = None
     
@@ -198,69 +167,60 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
         )
         conversation_flow.append(failure_msg)
     
-    # Add context about available tool results
+    # Add context about available tool results (simplified for structured output)
     if latest_tool_results:
         context_items = []
-        deployment_params = {}
         
         for tool, result in latest_tool_results.items():
-            if tool == "generate_erc20_contract":
+            if tool in ["generate_erc20_contract", "generate_erc721_contract"]:
                 try:
                     parsed = json.loads(result)
                     if "solidity_code" in parsed:
-                        # Extract deployment parameters
-                        deployment_params = {
-                            "token_name": parsed.get("token_name", "Unknown"),
-                            "token_symbol": parsed.get("token_symbol", "UNK"), 
-                            "initial_supply": parsed.get("initial_supply", 0)
-                        }
-                        context_items.append("ERC20 contract code is available for compilation")
+                        contract_name = parsed.get("contract_name", "Contract")
+                        context_items.append(f"{contract_name} generated and ready for compilation")
                 except:
-                    pass
+                    context_items.append("Contract code generated")
+                    
             elif tool == "compile_contract":
                 try:
                     parsed = json.loads(result)
                     if parsed.get("compilation_id"):
                         compilation_id = parsed['compilation_id']
-                        context_items.append(f"Compiled contract ready for deployment (ID: {compilation_id})")
+                        context_items.append(f"Contract compiled (ID: {compilation_id})")
                 except:
-                    pass
+                    context_items.append("Contract compilation completed")
         
-        if context_items:
-            availability_text = f"Available: {', '.join(context_items)}"
-            
-            # Add deployment parameter context if available
-            if deployment_params and any(deployment_params.values()):
-                param_text = f"Deployment parameters: initial_supply={deployment_params.get('initial_supply', 0)} for {deployment_params.get('token_name', 'token')}"
-                availability_text += f". {param_text}"
-            
+        # Only add context if we have useful information and limited conversation
+        if context_items and len(conversation_flow) < 3:
+            availability_text = f"Context: {', '.join(context_items)}"
             context_msg = Message(
                 role="assistant",
                 content=availability_text
             )
-            conversation_flow.insert(-1, context_msg)
+            conversation_flow.append(context_msg)
     
-    # Keep recent context
-    final_context = conversation_flow[-10:]
+    # Keep recent context - increased limit for structured responses
+    final_context = conversation_flow[-15:]
     
-    # FALLBACK: If context seems incomplete, include some raw tool data
-    # This helps ActionExecutionNode find actual data for compilation
-    if len(final_context) < 3:  # Very little context
-        # Add some recent tool messages for ActionExecutionNode
-        recent_tool_messages = []
-        for msg in messages[-20:]:  # Check last 20 messages
-            if msg.role == "tool" and msg.content:
-                # Add tool messages that contain useful data
-                try:
-                    tool_data = json.loads(msg.content)
-                    if "solidity_code" in tool_data:
-                        # This is useful for compilation
-                        recent_tool_messages.append(msg)
-                except:
-                    pass
-        
-        # Add the most recent useful tool message
-        if recent_tool_messages:
-            final_context.append(recent_tool_messages[-1])
+    # Ensure we have sufficient context for reasoning
+    if len(final_context) < 2 and messages:
+        # Add the most recent user message at minimum
+        for msg in reversed(messages[-10:]):
+            if msg.role == "user":
+                final_context.insert(0, msg)
+                break
+    
+    # Add wallet context if available
+    wallet_address = get_wallet_for_conversation(conversation_id)
+    if wallet_address:
+        wallet_context_msg = Message(
+            role="system",
+            content=f"[User's connected wallet address: {wallet_address}]"
+        )
+        # Insert wallet context near the beginning but after any user messages
+        if len(final_context) > 1:
+            final_context.insert(-1, wallet_context_msg)
+        else:
+            final_context.append(wallet_context_msg)
     
     return final_context

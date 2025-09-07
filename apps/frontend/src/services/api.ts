@@ -10,13 +10,30 @@ export interface ChatRequest {
 export interface ChatResponse {
   success: boolean;
   data?: {
-    backend_mode: string;
-    conversation_id: string;
-    message_id: string;
     response: string;
+    message_id: string;
+    structured_response?: any;
+    status?: string;
+    conversation_id: string;
     timestamp: string;
+    backend_mode: string;
   };
   error?: string;
+}
+
+export interface WalletConnectRequest {
+  wallet_address: string;
+  conversation_id?: string;
+}
+
+export interface WalletDisconnectRequest {
+  conversation_id?: string;
+}
+
+export interface WalletResponse {
+  success: boolean;
+  message: string;
+  wallet_address?: string;
 }
 
 class ApiService {
@@ -173,10 +190,20 @@ Please start the backend server to access the complete functionality!`;
     rejection_reason?: string;
   }): Promise<{ success: boolean; message: string; error?: string }> {
     try {
+      console.log('🚀 Sending approval response to backend:', {
+        approval_id: approvalData.approval_id,
+        approved: approvalData.approved,
+        has_signed_tx: !!approvalData.signed_transaction_hex,
+        signed_tx_length: approvalData.signed_transaction_hex?.length,
+        rejection_reason: approvalData.rejection_reason
+      });
+      
       const response = await this.axiosInstance.post('/api/approval/respond', approvalData);
+      
+      console.log('🎯 Backend response:', response.data);
       return response.data;
     } catch (error: any) {
-      console.error('Error submitting approval response:', error);
+      console.error('❌ Error submitting approval response:', error);
       
       if (error.response) {
         return {
@@ -203,6 +230,82 @@ Please start the backend server to access the complete functionality!`;
       return {
         success: false,
         error: error.message || 'Failed to create mock request'
+      };
+    }
+  }
+
+  // Wallet management methods
+  async connectWallet(walletAddress: string, conversationId?: string): Promise<WalletResponse> {
+    try {
+      const request: WalletConnectRequest = {
+        wallet_address: walletAddress,
+        conversation_id: conversationId
+      };
+      
+      const response = await this.axiosInstance.post('/api/wallet/connect', request);
+      console.log('Wallet connected:', response.data);
+      return response.data as WalletResponse;
+    } catch (error: any) {
+      console.error('Error connecting wallet:', error);
+      
+      if (error.response) {
+        return {
+          success: false,
+          message: error.response.data?.detail || error.response.data?.message || 'Failed to connect wallet'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error while connecting wallet'
+      };
+    }
+  }
+
+  async disconnectWallet(conversationId?: string): Promise<WalletResponse> {
+    try {
+      const request: WalletDisconnectRequest = {
+        conversation_id: conversationId
+      };
+      
+      const response = await this.axiosInstance.post('/api/wallet/disconnect', request);
+      console.log('Wallet disconnected:', response.data);
+      return response.data as WalletResponse;
+    } catch (error: any) {
+      console.error('Error disconnecting wallet:', error);
+      
+      if (error.response) {
+        return {
+          success: false,
+          message: error.response.data?.detail || error.response.data?.message || 'Failed to disconnect wallet'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error while disconnecting wallet'
+      };
+    }
+  }
+
+  async getWalletStatus(conversationId?: string): Promise<WalletResponse> {
+    try {
+      const params = conversationId ? { conversation_id: conversationId } : {};
+      const response = await this.axiosInstance.get('/api/wallet/status', { params });
+      return response.data as WalletResponse;
+    } catch (error: any) {
+      console.error('Error getting wallet status:', error);
+      
+      if (error.response) {
+        return {
+          success: false,
+          message: error.response.data?.detail || error.response.data?.message || 'Failed to get wallet status'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error while getting wallet status'
       };
     }
   }

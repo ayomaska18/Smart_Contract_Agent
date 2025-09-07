@@ -1,17 +1,22 @@
 import asyncio
 import requests
 import os
+import sys
 import json
 import solcx
 import uuid
 import sqlite3
 from datetime import datetime
+from typing import Annotated
 from dotenv import load_dotenv
+from pydantic import Field
 from fastmcp import FastMCP, Client, Context
 from jinja2 import Environment, FileSystemLoader
 from solcx import install_solc, set_solc_version
 from web3 import Web3
 from fastmcp.server.middleware import Middleware, MiddlewareContext
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class LoggingMiddleware(Middleware):
     """Middleware that logs all MCP operations."""
@@ -44,23 +49,55 @@ mcp.add_middleware(LoggingMiddleware())
     description="Generate an ERC20 token contract with advanced features"
 )
 async def generate_erc20_contract(
-        contract_name: str = "MyToken", 
-        token_name: str = "MyToken", 
-        token_symbol: str = "MTK",
-        initial_supply: int = 0,
-        decimals: int = 18,
-        mintable: bool = False,
-        burnable: bool = False,
-        pausable: bool = False,
-        permit: bool = False,
-        ownable: bool = False,
-        capped: bool = False,
-        max_supply: int = 0
-    ) -> dict:
+    contract_name: Annotated[str, Field(
+        description="Name of the contract class (e.g., 'MyToken')",
+        min_length=1, max_length=50
+    )],
+    token_name: Annotated[str, Field(
+        description="Display name of the token (e.g., 'My Token')", 
+        min_length=1, max_length=100
+    )],
+    token_symbol: Annotated[str, Field(
+        description="Token symbol (3-10 characters, uppercase recommended)",
+        min_length=1, max_length=10
+    )],
+    initial_supply: Annotated[int, Field(
+        description="Initial token supply (0 for no initial mint)",
+        ge=0
+    )] = 0,
+    decimals: Annotated[int, Field(
+        description="Number of decimal places (typically 18)",
+        ge=0, le=77
+    )] = 18,
+    mintable: Annotated[bool, Field(
+        description="Enable minting capability (requires ownable)"
+    )] = False,
+    burnable: Annotated[bool, Field(
+        description="Enable burning capability"
+    )] = False,
+    pausable: Annotated[bool, Field(
+        description="Enable pause functionality (requires ownable)"
+    )] = False,
+    permit: Annotated[bool, Field(
+        description="Enable EIP-2612 permit functionality"
+    )] = False,
+    ownable: Annotated[bool, Field(
+        description="Enable ownership controls (auto-enabled for mintable/pausable)"
+    )] = False,
+    capped: Annotated[bool, Field(
+        description="Enable supply cap (requires ownable)"
+    )] = False,
+    max_supply: Annotated[int, Field(
+        description="Maximum token supply for capped tokens (0 = unlimited)",
+        ge=0
+    )] = 0
+) -> dict:
+    """Generate ERC20 contract with strict parameter validation."""
     
     # Auto-enable ownable for features that require it
+    ownable_final = ownable
     if mintable or pausable or capped:
-        ownable = True
+        ownable_final = True
 
     env = Environment(loader=FileSystemLoader("/app/src"))
     template = env.get_template("contracts/erc20.sol")
@@ -74,7 +111,7 @@ async def generate_erc20_contract(
         burnable=burnable,
         pausable=pausable,
         permit=permit,
-        ownable=ownable,
+        ownable=ownable_final,
         capped=capped,
         max_supply=max_supply
     )
@@ -82,55 +119,101 @@ async def generate_erc20_contract(
     return {
         "solidity_code": solidity_code,
         "contract_type": "ERC20",
+        "contract_name": contract_name,
+        "token_name": token_name,
+        "token_symbol": token_symbol,
+        "initial_supply": initial_supply,
         "features": {
             "mintable": mintable,
             "burnable": burnable, 
             "pausable": pausable,
             "permit": permit,
-            "ownable": ownable,
+            "ownable": ownable_final,
             "capped": capped
         }
     }
 
-# Keep the old method for backward compatibility
-@mcp.tool(
-    name="generate_contract",
-    description="Generate an ERC20 contract with custom name and symbol (legacy method)"
-)
-async def generate_contract(
-        contract_name: str = "MyToken", 
-        token_name: str = "MyToken", 
-        token_symbol: str = "MTK",
-        mintable: bool = False,
-        ownable: bool = False
-    ) -> dict:
+# # Keep the old method for backward compatibility
+# @mcp.tool(
+#     name="generate_contract",
+#     description="Generate an ERC20 contract with custom name and symbol (legacy method)"
+# )
+# async def generate_contract(
+#     contract_name: Annotated[str, Field(
+#         description="Name of the contract class"
+#     )] = "MyToken",
+#     token_name: Annotated[str, Field(
+#         description="Display name of the token"
+#     )] = "MyToken",
+#     token_symbol: Annotated[str, Field(
+#         description="Token symbol"
+#     )] = "MTK",
+#     mintable: Annotated[bool, Field(
+#         description="Enable minting capability"
+#     )] = False,
+#     ownable: Annotated[bool, Field(
+#         description="Enable ownership controls"
+#     )] = False
+# ) -> dict:
+#     """Legacy ERC20 generation for backward compatibility."""
     
-    return await generate_erc20_contract(
-        contract_name=contract_name,
-        token_name=token_name,
-        token_symbol=token_symbol,
-        mintable=mintable,
-        ownable=ownable
-    )
+#     # Call the new generate_erc20_contract with mapped parameters
+#     return await generate_erc20_contract(
+#         contract_name=contract_name,
+#         token_name=token_name,
+#         token_symbol=token_symbol,
+#         mintable=mintable,
+#         ownable=ownable
+#     )
 
 @mcp.tool(
     name="generate_erc721_contract",
     description="Generate an ERC721 NFT contract with advanced features"
 )
 async def generate_erc721_contract(
-        contract_name: str = "MyNFT",
-        token_name: str = "My NFT Collection", 
-        token_symbol: str = "MNFT",
-        base_uri: str = "",
-        mintable: bool = True,
-        burnable: bool = False,
-        enumerable: bool = False,
-        uri_storage: bool = False,
-        ownable: bool = True,
-        royalty: bool = False,
-        royalty_percentage: int = 250,  # 2.5% in basis points
-        max_supply: int = 0  # 0 = unlimited
-    ) -> dict:
+    contract_name: Annotated[str, Field(
+        description="Name of the contract class (e.g., 'MyNFT')",
+        min_length=1, max_length=50
+    )],
+    token_name: Annotated[str, Field(
+        description="Name of the NFT collection (e.g., 'My NFT Collection')",
+        min_length=1, max_length=100
+    )],
+    token_symbol: Annotated[str, Field(
+        description="NFT collection symbol (e.g., 'MNFT')",
+        min_length=1, max_length=10
+    )],
+    base_uri: Annotated[str, Field(
+        description="Base URI for token metadata (e.g., 'https://api.mynfts.com/metadata/')"
+    )] = "",
+    mintable: Annotated[bool, Field(
+        description="Enable minting capability"
+    )] = True,
+    burnable: Annotated[bool, Field(
+        description="Enable burning capability"
+    )] = False,
+    enumerable: Annotated[bool, Field(
+        description="Enable token enumeration (increases gas costs)"
+    )] = False,
+    uri_storage: Annotated[bool, Field(
+        description="Enable per-token URI storage"
+    )] = False,
+    ownable: Annotated[bool, Field(
+        description="Enable ownership controls"
+    )] = True,
+    royalty: Annotated[bool, Field(
+        description="Enable EIP-2981 royalty support"
+    )] = False,
+    royalty_percentage: Annotated[int, Field(
+        description="Royalty percentage in basis points (250 = 2.5%, max 100%)",
+        ge=0, le=10000
+    )] = 250,
+    max_supply: Annotated[int, Field(
+        description="Maximum NFT supply (0 = unlimited)",
+        ge=0
+    )] = 0
+) -> dict:
+    """Generate ERC721 NFT contract with strict parameter validation."""
 
     env = Environment(loader=FileSystemLoader("/app/src"))
     template = env.get_template("contracts/erc721.sol")
@@ -151,7 +234,11 @@ async def generate_erc721_contract(
 
     return {
         "solidity_code": solidity_code,
-        "contract_type": "ERC721",
+        "contract_type": "ERC721", 
+        "contract_name": contract_name,
+        "token_name": token_name,
+        "token_symbol": token_symbol,
+        "base_uri": base_uri,
         "features": {
             "mintable": mintable,
             "burnable": burnable,
@@ -167,7 +254,12 @@ async def generate_erc721_contract(
     name="compile_contract",
     description="Compile Solidity code and return compilation ID"
 )
-async def compile_contract(solidity_code: str) -> dict:
+async def compile_contract(
+    solidity_code: Annotated[str, Field(
+        description="Solidity source code to compile",
+        min_length=1
+    )]
+) -> dict:
     try:
         print('here is the solidity code ', solidity_code)
         compiled = solcx.compile_source(
@@ -204,7 +296,11 @@ async def compile_contract(solidity_code: str) -> dict:
     name="get_abi",
     description="Get contract ABI using compilation ID"
 )
-async def get_abi(compilation_id: str) -> dict:
+async def get_abi(
+    compilation_id: Annotated[str, Field(
+        description="Compilation ID from compile_contract tool"
+    )]
+) -> dict:
     if compilation_id not in compilation_cache:
         return {
             "abi": None,
@@ -222,7 +318,11 @@ async def get_abi(compilation_id: str) -> dict:
     name="get_bytecode",
     description="Get contract bytecode using compilation ID"
 )
-async def get_bytecode(compilation_id: str) -> dict:
+async def get_bytecode(
+    compilation_id: Annotated[str, Field(
+        description="Compilation ID from compile_contract tool"
+    )]
+) -> dict:
     if compilation_id not in compilation_cache:
         return {
             "bytecode": None,
@@ -240,7 +340,23 @@ async def get_bytecode(compilation_id: str) -> dict:
     name="deploy_contract",
     description="Deploy compiled contract to Ethereum network using compilation ID"
 )
-async def deploy_contract(compilation_id: str, initial_owner: str = wallet_address, gas_limit: int = 2000000, gas_price_gwei: int = 10) -> dict:
+async def deploy_contract(
+    compilation_id: Annotated[str, Field(
+        description="Compilation ID from compile_contract tool"
+    )],
+    initial_owner: Annotated[str, Field(
+        description="Initial owner wallet address (must be valid Ethereum address)"
+    )],
+    gas_limit: Annotated[int, Field(
+        description="Gas limit for deployment transaction",
+        ge=21000, le=10000000
+    )] = 2000000,
+    gas_price_gwei: Annotated[int, Field(
+        description="Gas price in Gwei",
+        ge=1, le=1000
+    )] = 10
+) -> dict:
+    """Deploy contract using server wallet with strict parameter validation."""
     if compilation_id not in compilation_cache:
         return {
             "contract_address": None,
@@ -315,11 +431,12 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
         nonce = w3.eth.get_transaction_count(account)
 
         # Use deployer address as initial owner if not specified
-        if initial_owner is None:
-            initial_owner = account
+        owner_address = initial_owner
+        if not owner_address:
+            owner_address = account
 
         # Ensure address is in proper checksum format
-        initial_owner = w3.to_checksum_address(initial_owner)
+        owner_address = w3.to_checksum_address(owner_address)
 
         erc20_token = w3.eth.contract(abi=abi, bytecode=bytecode)
         
@@ -343,7 +460,7 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
                 
                 if param_type == 'address':
                     # Address parameters (like initialOwner)
-                    constructor_args.append(initial_owner)
+                    constructor_args.append(owner_address)
                 elif param_type == 'uint256':
                     # Handle uint256 parameters (like initial supply)
                     if 'supply' in param_name or 'amount' in param_name:
@@ -378,7 +495,7 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
 
         print(f"[DEBUG] constructor_inputs: {constructor_inputs}")
         print(f"[DEBUG] constructor_args: {constructor_args}")
-        print(f"[DEBUG] initial_owner: {initial_owner}")
+        print(f"[DEBUG] initial_owner: {owner_address}")
         
         transaction = erc20_token.constructor(*constructor_args).build_transaction({
             'from': account,
@@ -410,7 +527,7 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
             "gas_used": receipt.gasUsed,
             "block_number": receipt.blockNumber,
             "constructor_args": constructor_args,
-            "initial_owner_used": initial_owner,
+            "initial_owner_used": owner_address,
             "actual_owner": actual_owner
         }
         
@@ -427,10 +544,20 @@ async def deploy_contract(compilation_id: str, initial_owner: str = wallet_addre
     description="Prepare deployment transaction for user wallet signing"
 )
 async def prepare_deployment_transaction(
-    compilation_id: str,
-    user_wallet_address: str,
-    gas_limit: int = 2000000,
-    gas_price_gwei: int = 10
+    compilation_id: Annotated[str, Field(
+        description="Compilation ID from compile_contract tool"
+    )],
+    user_wallet_address: Annotated[str, Field(
+        description="User's wallet address that will sign the transaction"
+    )],
+    gas_limit: Annotated[int, Field(
+        description="Gas limit for deployment transaction",
+        ge=21000, le=10000000
+    )] = 2000000,
+    gas_price_gwei: Annotated[int, Field(
+        description="Gas price in Gwei",
+        ge=1, le=1000
+    )] = 10
 ) -> dict:
     """
     Prepares a deployment transaction that can be signed by the user's wallet.
@@ -576,7 +703,12 @@ async def prepare_deployment_transaction(
     name="broadcast_signed_transaction",
     description="Broadcast user's signed transaction to deploy contract"
 )
-async def broadcast_signed_transaction(signed_transaction_hex: str) -> dict:
+async def broadcast_signed_transaction(
+    signed_transaction_hex: Annotated[str, Field(
+        description="Hex-encoded signed transaction data",
+        min_length=1
+    )]
+) -> dict:
     """
     Broadcasts a signed transaction from the user's wallet.
     This completes the deployment process after user signing.
@@ -604,11 +736,12 @@ async def broadcast_signed_transaction(signed_transaction_hex: str) -> dict:
             }
         
         # Remove '0x' prefix if present and ensure proper format
-        if signed_transaction_hex.startswith('0x'):
-            signed_transaction_hex = signed_transaction_hex[2:]
+        signed_hex = signed_transaction_hex
+        if signed_hex.startswith('0x'):
+            signed_hex = signed_hex[2:]
         
         # Convert hex string to bytes
-        signed_transaction_bytes = bytes.fromhex(signed_transaction_hex)
+        signed_transaction_bytes = bytes.fromhex(signed_hex)
         
         # Broadcast the signed transaction
         tx_hash = w3.eth.send_raw_transaction(signed_transaction_bytes)

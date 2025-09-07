@@ -54,23 +54,22 @@ async def poll_approval_requests(request: Request):
     Poll for pending approval requests from the deployment workflow
     """
     try:
-        # Get the assistant from app state to access the workflow topics
         assistant = getattr(request.app.state, "assistant", None)
         
         if assistant is None:
             logger.error("Assistant not available for approval polling")
             return PollResponse(has_requests=False, requests=[])
 
-        # Access the workflow and event store
         workflow = getattr(assistant, "workflow", None)
         if workflow is None:
             logger.error("Workflow not available for approval polling")
             return PollResponse(has_requests=False, requests=[])
 
-        # Note: Event store logic disabled - using direct storage in chat.py instead
-        # The approval requests are created directly in chat.py and stored in approval_requests dict
+        # Debug: Log all approval requests and their status
+        logger.info(f"Total approval requests in memory: {len(approval_requests)}")
+        for req_id, req_data in approval_requests.items():
+            logger.info(f"  - {req_id}: processed={req_data.get('processed', False)}")
         
-        # Return stored approval requests (both new and existing)
         pending_requests = [
             ApprovalRequest(**request_data) 
             for request_data in approval_requests.values()
@@ -153,6 +152,10 @@ async def submit_approval_response(approval_response: ApprovalResponse, request:
         # Mark the approval request as processed
         if approval_response.approval_id in approval_requests:
             approval_requests[approval_response.approval_id]["processed"] = True
+            logger.info(f"Marked approval request {approval_response.approval_id} as processed")
+        else:
+            logger.warning(f"Approval request {approval_response.approval_id} not found in approval_requests")
+            logger.info(f"Available approval request IDs: {list(approval_requests.keys())}")
 
         logger.info("Approval response submitted successfully")
         

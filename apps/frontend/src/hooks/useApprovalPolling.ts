@@ -91,8 +91,25 @@ export const useApprovalPolling = (interval = 2000): UseApprovalPollingResult =>
 
       if (result.success) {
         console.log('✅ Approval response submitted successfully');
-        // Remove the processed request from local state
+        // Remove the processed request from local state immediately
         setApprovalRequests(prev => prev.filter(req => req.approval_id !== approvalId));
+        
+        // Stop polling temporarily to prevent refetching the same request
+        // The backend needs time to mark it as processed
+        if (intervalRef.current) {
+          console.log('⏸️ Temporarily pausing polling to allow backend processing');
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        
+        // Resume polling after a delay to allow backend to process
+        const resumePolling = () => {
+          console.log('▶️ Resuming polling after approval processing delay');
+          intervalRef.current = setInterval(poll, interval);
+        };
+        
+        setTimeout(resumePolling, 2000); // 2 second delay
+        
         return true;
       } else {
         console.error('❌ Failed to submit approval response:', result.error);

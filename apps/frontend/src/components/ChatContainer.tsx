@@ -46,14 +46,50 @@ const ChatContainer: React.FC = () => {
 
   // Start polling when component mounts
   useEffect(() => {
-    console.log('🔄 Starting approval polling on component mount');
+    console.log('Starting approval polling on component mount');
     startPolling();
     
     return () => {
-      console.log('⏹️ Stopping approval polling on component unmount');
+      console.log('Stopping approval polling on component unmount');
       stopPolling();
     };
   }, [startPolling, stopPolling]);
+
+  // Auto-register wallet when connected/disconnected
+  useEffect(() => {
+    const handleWalletConnection = async () => {
+      if (isConnected && address) {
+        console.log('Wallet connected, registering with backend:', address);
+        try {
+          const result = await apiService.connectWallet(address, chatState.conversationId || undefined);
+          if (result.success) {
+            console.log('Wallet registered successfully:', result.message);
+          } else {
+            console.warn('Failed to register wallet:', result.message);
+          }
+        } catch (error) {
+          console.error('Error registering wallet:', error);
+        }
+      } else if (!isConnected && address) {
+        console.log('Wallet disconnected, unregistering from backend');
+        try {
+          const result = await apiService.disconnectWallet(chatState.conversationId || undefined);
+          if (result.success) {
+            console.log('Wallet unregistered successfully:', result.message);
+          } else {
+            console.warn('Failed to unregister wallet:', result.message);
+          }
+        } catch (error) {
+          console.error('Error unregistering wallet:', error);
+        }
+      }
+    };
+
+    // Only run on client side and when isClient is ready
+    if (isClient) {
+      handleWalletConnection();
+    }
+  }, [isConnected, address, isClient, chatState.conversationId]);
 
   // Handle approval requests when they arrive
   useEffect(() => {
@@ -371,7 +407,6 @@ Your smart contract has been successfully deployed and is now live on the blockc
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
 
-    // Keep user message as-is (wallet address will be handled by the backend if needed)
     let enhancedContent = content.trim();
 
     const userMessage: Message = {
@@ -422,63 +457,72 @@ Your smart contract has been successfully deployed and is now live on the blockc
         if (response.success && response.data) {
           const backendConversationId = response.data.conversation_id;
           const assistantResponse = response.data.response;
+          const structuredResponse = response.data.structured_response;
+          const status = response.data.status;
 
-          // Check if the response contains transaction data that needs signing
-          console.log('Checking for transaction data in response:', assistantResponse.substring(0, 300) + '...');
-          const parsedData = parseTransactionFromMessage(assistantResponse);
-          console.log('Parsed transaction data:', parsedData);
-          
-          // Check for specific transaction preparation indicators (not general deploy mentions)
-          const needsSigning = (assistantResponse.includes("Please sign") || 
-                             assistantResponse.includes("wallet to sign") ||
-                             assistantResponse.includes("Transaction prepared") ||
-                             assistantResponse.includes("prepared for user signing")) &&
-                             // Only show if there's actual transaction data or specific signing request
-                             (parsedData?.transaction || assistantResponse.includes("ready to sign"));
-          
-          console.log('Needs signing detected:', needsSigning);
-          
-          if (parsedData && parsedData.transaction && isConnected && address) {
-            console.log('Showing transaction modal with parsed data:', parsedData);
-            // Show transaction modal for user to sign with actual transaction data
-            setTransactionModal({
-              isOpen: true,
-              transactionData: {
-                ...parsedData.transaction,
-                // Include additional MCP data if available
-                mcpResponse: parsedData.mcpResponse,
-                estimated_gas: parsedData.mcpResponse?.estimated_gas,
-                gas_price_gwei: parsedData.mcpResponse?.gas_price_gwei,
-                user_address: parsedData.mcpResponse?.user_address
-              }
-            });
-          } else if (needsSigning && isConnected && address) {
-            console.log('Detected signing request but no transaction data - asking user to check wallet');
-            // Add a message encouraging user to check their wallet
-            const checkWalletMessage: Message = {
-              id: generateMessageId(),
-              role: 'assistant',
-              content: '🔔 **Transaction Ready**: Please check your connected wallet app (MetaMask) for a transaction notification to sign.',
-              timestamp: new Date(),
+          console.log('Backend response status:', status);
+          console.log('Structured response:', structuredResponse);
+
+          // Check if the backend indicates a transaction is ready for signing
+          const isPendingSignature = status === 'pending_signature';
+          let transactionData = null;
+
+          // First check structured_response for MCP transaction data
+          if (structuredResponse && structuredResponse.success && structuredResponse.transaction) {
+            console.log('Found transaction in structured_response:', structuredResponse);
+            transactionData = {
+              mcpResponse: structuredResponse,
+              transaction: structuredResponse.transaction
             };
-            
-            setChatState(prev => ({
-              ...prev,
-              messages: [...prev.messages, checkWalletMessage],
-            }));
-          } else if (parsedData && !isConnected) {
-            console.log('Transaction found but wallet not connected');
+          } else {
+            // Fallback to parsing from message text
+            console.log('Checking for transaction data in response text:', assistantResponse.substring(0, 300) + '...');
+            const parsedData = parseTransactionFromMessage(assistantResponse);
+            console.log('Parsed transaction data from text:', parsedData);
+            if (parsedData) {
+              transactionData = parsedData;
+            }
+          }
+          
+          console.log('Final transaction data:', transactionData);
+          console.log('Is pending signature:', isPendingSignature);
+          console.log('Has transaction data:', !!transactionData);
+          console.log('Is connected:', isConnected);
+          console.log('Has address:', !!address);
+          
+          if ((isPendingSignature || transactionData) && transactionData?.transaction && isConnected && address) {
+            console.log('Showing transaction modal with transaction data:', transactionData);
+            console.log('⚠️ Direct transaction modal triggered - this should use approval flow instead');
+            // Note: This direct transaction flow is deprecated
+            // All transactions should go through the approval polling system
+            // Keeping this as fallback but logging for debugging
+          } else if (isPendingSignature && !isConnected) {
+            console.log('Transaction ready but wallet not connected');
             // Prompt user to connect wallet
             const connectWalletMessage: Message = {
               id: generateMessageId(),
               role: 'assistant',
-              content: '⚠️ **Wallet Required**: Please connect your wallet to sign the prepared transaction.',
+              content: ' **Wallet Required**: Please connect your wallet to sign the prepared transaction.',
               timestamp: new Date(),
             };
             
             setChatState(prev => ({
               ...prev,
               messages: [...prev.messages, connectWalletMessage],
+            }));
+          } else if (isPendingSignature && !transactionData) {
+            console.log('Pending signature but no transaction data - asking user to check wallet');
+            // Add a message encouraging user to check their wallet
+            const checkWalletMessage: Message = {
+              id: generateMessageId(),
+              role: 'assistant',
+              content: ' **Transaction Ready**: Please check your connected wallet app (MetaMask) for a transaction notification to sign.',
+              timestamp: new Date(),
+            };
+            
+            setChatState(prev => ({
+              ...prev,
+              messages: [...prev.messages, checkWalletMessage],
             }));
           }
 

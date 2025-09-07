@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
-import { apiService } from '../services/api';
+import { serializeTransaction } from 'viem';
 
 interface TransactionData {
   from?: string;
@@ -14,7 +14,6 @@ interface TransactionData {
   nonce?: number;
   chainId?: number;
   value?: string | number;
-  // Additional MCP data
   mcpResponse?: any;
   estimated_gas?: number;
   gas_price_gwei?: number;
@@ -79,69 +78,71 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setSignStatus('signing');
         console.log('Transaction data received:', currentTransactionData);
         
-        // Prepare transaction for signing
-        const txToSign = {
-          from: address as `0x${string}`,
+        // Prepare transaction for sending (browser wallets use sendTransaction, not signTransaction)
+        const txToSend = {
+          account: address as `0x${string}`,
           to: currentTransactionData.to as `0x${string}` | undefined,
           data: currentTransactionData.data as `0x${string}`,
           gas: BigInt(currentTransactionData.gas || currentTransactionData.estimated_gas || 2000000),
           gasPrice: BigInt(currentTransactionData.gasPrice || (currentTransactionData.gas_price_gwei ? Math.floor(currentTransactionData.gas_price_gwei * 1e9) : 10e9)),
           nonce: currentTransactionData.nonce || undefined,
-          chainId: currentTransactionData.chainId,
           value: BigInt(currentTransactionData.value || 0),
         };
 
-        console.log('Signing transaction:', txToSign);
+        console.log('Sending transaction:', txToSend);
+        setSignStatus('broadcasting');
 
         try {
-          // Try direct signing first (works with some wallets)
-          const signedTransaction = await walletClient.signTransaction(txToSign);
-          console.log('Transaction signed:', signedTransaction);
+          // Try signTransaction first (works with some wallets like MetaMask in certain cases)
+          try {
+            console.log('Attempting signTransaction...');
+            const serializedTx = await walletClient.signTransaction(txToSend);
+            console.log('Transaction signed successfully:', serializedTx);
 
-          // Submit approval with signed transaction
-          const approvalSuccess = await onApprovalSubmit(
-            approvalRequest!.approval_id, 
-            true, 
-            signedTransaction
-          );
+            // Submit approval with signed transaction hex
+            const approvalSuccess = await onApprovalSubmit(
+              approvalRequest!.approval_id, 
+              true, 
+              serializedTx
+            );
 
-          if (approvalSuccess) {
-            setSignStatus('success');
-            console.log('Approval and signed transaction submitted successfully');
+            if (approvalSuccess) {
+              setSignStatus('success');
+              console.log('Approval and signed transaction submitted successfully');
+              
+              // Close modal after a short delay
+              setTimeout(() => {
+                onClose();
+                setSignStatus('idle');
+              }, 2000);
+            } else {
+              throw new Error('Failed to submit approval response');
+            }
+
+          } catch (signError: any) {
+            // If signTransaction fails, fall back to sendTransaction
+            console.log('signTransaction failed, falling back to sendTransaction:', signError.message);
             
-            // Close modal after a short delay
-            setTimeout(() => {
-              onClose();
-              setSignStatus('idle');
-            }, 2000);
-          } else {
-            throw new Error('Failed to submit approval response');
-          }
+            // Check if this is the expected signTransaction error
+            if (signError.message?.includes('eth_signTransaction') || 
+                signError.message?.includes('not supported') ||
+                signError.message?.includes('Method not supported')) {
+              
+              console.log('Using sendTransaction approach - transaction will be broadcast directly');
+              const txHash = await walletClient.sendTransaction(txToSend);
+              console.log('Transaction sent directly, hash:', txHash);
 
-        } catch (signError: any) {
-          console.log('Direct signing failed, trying sendTransaction approach:', signError);
-          
-          // Alternative approach: Use sendTransaction and get the hash
-          if (signError.message?.includes('eth_signTransaction') || signError.message?.includes('not supported')) {
-            setSignStatus('broadcasting');
-            
-            try {
-              // Send the transaction directly and get the hash
-              const txHash = await walletClient.sendTransaction(txToSign);
-              console.log('Transaction sent, hash:', txHash);
-
-              // Submit approval with transaction hash (the backend will handle broadcasting)
+              // Submit approval with transaction hash (backend should handle this differently)
               const approvalSuccess = await onApprovalSubmit(
                 approvalRequest!.approval_id, 
                 true, 
-                txHash // Pass the transaction hash instead of signed data
+                txHash // Note: This is a tx hash, not signed hex
               );
 
               if (approvalSuccess) {
                 setSignStatus('success');
-                console.log('Approval and transaction submitted successfully');
+                console.log('Approval and transaction hash submitted successfully');
                 
-                // Close modal after a short delay
                 setTimeout(() => {
                   onClose();
                   setSignStatus('idle');
@@ -149,61 +150,51 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               } else {
                 throw new Error('Failed to submit approval response');
               }
-
-            } catch (sendError) {
-              console.error('SendTransaction also failed:', sendError);
-              throw new Error('Unable to sign or send transaction. Please try again.');
+            } else {
+              throw signError;
             }
-          } else {
-            throw signError;
           }
+
+        } catch (error: any) {
+          console.error('Transaction failed:', error);
+          throw new Error(`Transaction failed: ${error.message || 'Unknown error'}`);
         }
 
       } else {
         // Direct transaction mode (legacy)
-        setSignStatus('signing');
+        setSignStatus('broadcasting');
         console.log('Transaction data received:', currentTransactionData);
         
-        // Prepare transaction for signing
-        const txToSign = {
-          from: address as `0x${string}`,
+        // Prepare transaction for sending
+        const txToSend = {
+          account: address as `0x${string}`,
           to: currentTransactionData.to as `0x${string}` | undefined,
           data: currentTransactionData.data as `0x${string}`,
           gas: BigInt(currentTransactionData.gas || currentTransactionData.estimated_gas || 2000000),
           gasPrice: BigInt(currentTransactionData.gasPrice || (currentTransactionData.gas_price_gwei ? Math.floor(currentTransactionData.gas_price_gwei * 1e9) : 10e9)),
           nonce: currentTransactionData.nonce || undefined,
-          chainId: currentTransactionData.chainId,
           value: BigInt(currentTransactionData.value || 0),
         };
 
-        console.log('Signing transaction:', txToSign);
+        console.log('Sending transaction:', txToSend);
 
-        // Sign the transaction with MetaMask
-        const signedTransaction = await walletClient.signTransaction(txToSign);
-        console.log('Transaction signed:', signedTransaction);
+        // Send transaction directly (browser wallets handle signing internally)
+        const txHash = await walletClient.sendTransaction(txToSend);
+        console.log('Transaction sent, hash:', txHash);
 
-        setSignStatus('broadcasting');
-
-        // Send signed transaction to backend for broadcasting
-        const broadcastResponse = await apiService.broadcastSignedTransaction(signedTransaction);
+        setSignStatus('success');
+        console.log('Transaction successful:', txHash);
         
-        if (broadcastResponse.success) {
-          setSignStatus('success');
-          console.log('Transaction broadcast successful:', broadcastResponse);
-          
-          // Call the original onConfirm callback if provided
-          if (onConfirm) {
-            onConfirm();
-          }
-          
-          // Close modal after a short delay
-          setTimeout(() => {
-            onClose();
-            setSignStatus('idle');
-          }, 2000);
-        } else {
-          throw new Error(broadcastResponse.error || 'Failed to broadcast transaction');
+        // Call the original onConfirm callback if provided
+        if (onConfirm) {
+          onConfirm();
         }
+        
+        // Close modal after a short delay
+        setTimeout(() => {
+          onClose();
+          setSignStatus('idle');
+        }, 2000);
       }
 
     } catch (error: any) {
