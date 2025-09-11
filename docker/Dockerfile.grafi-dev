@@ -32,5 +32,4 @@ WORKDIR /app
 
 COPY apps/backend/ ./backend/
 
-# Default command - launch grafi-dev pointing to our assistant
 CMD ["uv", "run", "grafi-dev", "./backend/agents/true_react_agent.py"]
