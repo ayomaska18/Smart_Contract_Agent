@@ -229,10 +229,9 @@ contract MyToken is ERC20 {
     }
 }
 ```
-
+```
 Would you like me to compile and deploy this contract to Sepolia testnet?
 ```
-
 ### Deployment with User Wallet Approval
 
 ```
@@ -298,6 +297,7 @@ Your MyToken contract is now live on Sepolia testnet! 🎉
 ## Acknowledgments
 
 Built with love using open-source technologies. Special thanks to the Binome team for making this project possible.
+
 
 
 
