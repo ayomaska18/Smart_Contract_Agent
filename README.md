@@ -140,7 +140,7 @@ ruff format .
 
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── apps/
@@ -194,29 +194,29 @@ ruff format .
 ### Creating an ERC20 Token with Natural Language
 
 ```
-👤 User: Create an ERC20 token called "MyToken" with symbol "MTK" and 1 million initial supply
+User: Create an ERC20 token called "MyToken" with symbol "MTK" and 1 million initial supply
 
-🤖 AI Assistant:
-💭 THOUGHT: User wants to create an ERC20 token. I need to use the generate_erc20_contract tool to create the contract.
+AI Assistant:
+THOUGHT: User wants to create an ERC20 token. I need to use the generate_erc20_contract tool to create the contract.
 
-🔧 ACTION: generate_erc20_contract
+ACTION: generate_erc20_contract
 - contract_name: "MyToken"
 - token_name: "MyToken"  
 - token_symbol: "MTK"
 - initial_supply: 1000000
 - features: {"mintable": false, "burnable": false, "ownable": false}
 
-✅ OBSERVATION: Successfully generated ERC20 contract with Solidity code
+OBSERVATION: Successfully generated ERC20 contract with Solidity code
 
-🎯 FINAL ANSWER: I've created your MyToken ERC20 contract! Here are the details:
+FINAL ANSWER: I've created your MyToken ERC20 contract! Here are the details:
 
-**📋 Contract Details:**
+**Contract Details:**
 - **Name**: MyToken (MTK)
 - **Initial Supply**: 1,000,000 tokens
 - **Features**: Standard ERC20 functionality
 - **Solidity Version**: ^0.8.27
 
-**💻 Generated Contract:**
+**Generated Contract:**
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
@@ -229,46 +229,45 @@ contract MyToken is ERC20 {
     }
 }
 ```
-
+```
 Would you like me to compile and deploy this contract to Sepolia testnet?
 ```
-
 ### Deployment with User Wallet Approval
 
 ```
-👤 User: Yes, deploy it to Sepolia testnet
+User: Yes, deploy it to Sepolia testnet
 
-🤖 AI Assistant:
-💭 THOUGHT: User wants to deploy the contract. I need to compile it first, then prepare a deployment transaction for the user's wallet to sign.
+AI Assistant:
+THOUGHT: User wants to deploy the contract. I need to compile it first, then prepare a deployment transaction for the user's wallet to sign.
 
-🔧 ACTION: compile_contract → prepare_deployment_transaction
+ACTION: compile_contract → prepare_deployment_transaction
 
-🔐 **Approval Required**: Please connect your wallet and approve the deployment transaction:
+**Approval Required**: Please connect your wallet and approve the deployment transaction:
 
-**📋 Transaction Details:**
+**Transaction Details:**
 - **Contract**: MyToken
 - **Network**: Sepolia Testnet  
 - **Estimated Gas**: 847,392
 - **Gas Price**: 20 Gwei
 - **Total Cost**: ~0.017 ETH
 
-[🔗 **Approve in Wallet**] ← *User clicks and signs transaction*
+[**Approve in Wallet**] ← *User clicks and signs transaction*
 
-✅ **Deployment Successful!**
+**Deployment Successful!**
 
-**📋 Deployment Results:**
+**Deployment Results:**
 - **Contract Address**: `0x742d35Cc7abC5A2C7B8C1C3d3F0F8E2B91d4b3eF`
 - **Transaction Hash**: `0x5f9ea17d5b5f4e8c7a2c3b8e9f0a1d2c4e6f8a9b`
 - **Block Number**: 18,500,000
 - **Deployer**: Your connected wallet
 - **Gas Used**: 847,392
 
-🔗 **View on Etherscan**: https://sepolia.etherscan.io/address/0x742d35Cc7abC5A2C7B8C1C3d3F0F8E2B91d4b3eF
+**View on Etherscan**: https://sepolia.etherscan.io/address/0x742d35Cc7abC5A2C7B8C1C3d3F0F8E2B91d4b3eF
 
 Your MyToken contract is now live on Sepolia testnet! 🎉
 ```
 
-## 🛠️ Technology Stack
+## 🛠Technology Stack
 
 ### Backend
 - **Graphite Framework**: Event-driven AI agent architecture with event sourcing
@@ -295,8 +294,10 @@ Your MyToken contract is now live on Sepolia testnet! 🎉
 - **uv**: Fast Python package manager
 - **Ruff**: Python linter and formatter
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with love using open-source technologies. Special thanks to the Binome team for making this project possible.
+
+
 
 
