@@ -12,7 +12,7 @@ Frontend (Next.js + Wagmi) → Backend API (FastAPI) → MCP Server (FastMCP)
             RainbowKit Wallet    ReAct Agents         Smart Contract Tools
             User Approvals       Event Sourcing       Solidity Templates
                   ↓                    ↓                      ↓
-            MetaMask/WalletConnect → PostgreSQL DB ← Blockchain (Sepolia)
+            MetaMask/WalletConnect → PostgreSQL DB ← Blockchain (Currently Sepolia only)
 ```
 
 ### Components
@@ -26,20 +26,20 @@ Frontend (Next.js + Wagmi) → Backend API (FastAPI) → MCP Server (FastMCP)
 
 ## Features
 
-### 🤖 AI Agent Capabilities
+### AI Agent Capabilities
 - **ReAct Agent Architecture**: Advanced reasoning with THOUGHT → ACTION → OBSERVATION flow
 - **Natural Language Processing**: Create smart contracts with conversational prompts
 - **Context Awareness**: Persistent conversation history and tool result integration
 - **Error Recovery**: Automatic retry logic and fallback handling
 
-### 🔗 Blockchain Integration  
+### Blockchain Integration  
 - **Smart Contract Generation**: ERC20 & ERC721 tokens with advanced features
 - **Solidity Compilation**: Automated compilation with OpenZeppelin integration
 - **User Wallet Deployment**: Deploy contracts using connected MetaMask/WalletConnect
 - **Approval Workflows**: User confirmation for transactions with real-time status
 - **Testnet Support**: Ethereum Sepolia testnet integration
 
-### 💾 Enterprise Architecture
+### Enterprise Architecture
 - **Event Sourcing**: Complete audit trail and state recovery via PostgreSQL
 - **Structured Responses**: Type-safe API responses with Pydantic models  
 - **MCP Protocol**: Modular tool system for blockchain operations
@@ -74,30 +74,38 @@ Edit `.env` with your API keys:
 
 ```env
 # AI Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4o
-OPENAI_SYSTEM_MESSAGE="You are a helpful AI assistant specialized in smart contract development."
+OPENAI_API_KEY=
+OPENAI_MODEL= # suggest gpt-4o or above
 
-# Blockchain Configuration  
-METAMASK_PRIVATE_KEY=your_metamask_private_key_here
-ETHEREUM_SEPOLIA_RPC=https://eth-sepolia.g.alchemy.com/v2/your_project_id
-WALLET_ADDRESS=0xYourWalletAddressHere
+# Blockchain Configuration
+# currently supports Metamask only
+METAMASK_PRIVATE_KEY= # can be obtained via your metamask wallet
+ETHEREUM_SEPOLIA_RPC= # can be obtained via RPC providers e.g., Alchemy, Infura
 
-# Service URLs
+# pg admin
+pg_admin_email=
+pg_admin_password=
+
+# MCP server 
 MCP_SERVER_URL=http://mcp_server:8081/mcp/
+
+# frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID= # can be left blank
+
+# Backend
 BACKEND_API_URL=http://backend:8000
 
-# Database Configuration
-POSTGRES_DB=grafi_test_db
-POSTGRES_USER=testing
-POSTGRES_PASSWORD=testing
+# Postgres
+POSTGRES_DB=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 
-# Admin Configuration
-pg_admin_email=admin@admin.com
-pg_admin_password=admin
+# Phoenix
+PHOENIX_ENDPOINT=http://phoenix:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=phoenix:4317
 ```
 
 ### 3. Start Application
@@ -118,37 +126,6 @@ docker-compose up --build -d
 - **MCP Server**: http://localhost:8081/mcp/
 - **pgAdmin**: http://localhost:5050
 
-##  Development
-
-### Local Development Setup
-
-1. **Install Python Dependencies**:
-   ```bash
-   pip install uv
-   uv sync
-   ```
-
-2. **Install Node Dependencies**:
-   ```bash
-   npm install  # Root level for OpenZeppelin contracts
-   cd apps/frontend && npm install
-   ```
-
-3. **Run Services Individually**:
-   ```bash
-   # Backend (in terminal 1)
-   cd apps/backend
-   uv run python main.py
-   
-   # Frontend (in terminal 2) 
-   cd apps/frontend
-   npm run dev
-   
-   # MCP Server (in terminal 3)
-   cd services/mcp_server
-   uv run python src/servers/server.py
-   ```
-
 ### Code Quality
 
 ```bash
@@ -161,8 +138,6 @@ mypy .
 # Formatting
 ruff format .
 
-# Tests
-pytest
 ```
 
 ## 📁 Project Structure
@@ -201,21 +176,10 @@ pytest
 ├── docker-compose.yaml          # Service orchestration
 ├── pyproject.toml               # Python project configuration (uv)
 ├── uv.lock                      # Python dependency lock file
-├── package.json                 # Root package.json (OpenZeppelin contracts)
-└── CLAUDE.md                    # Development instructions for LLMs
+└── package.json                 # Root package.json (OpenZeppelin contracts)
 ```
 
 ##  Configuration
-
-### Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key for AI responses | `sk-proj-...` |
-| `OPENAI_MODEL` | OpenAI model to use | `gpt-4o` |
-| `METAMASK_PRIVATE_KEY` | Wallet private key for deployments | `0x...` |
-| `ETHEREUM_SEPOLIA_RPC` | Ethereum testnet RPC URL | `https://eth-sepolia.g.alchemy.com/v2/...` |
-| `WALLET_ADDRESS` | Deployment wallet address | `0x...` |
 
 ### Docker Services
 
@@ -333,5 +297,6 @@ Your MyToken contract is now live on Sepolia testnet! 🎉
 
 ## 🙏 Acknowledgments
 
-Built with love using open-source technologies. Special thanks to the Ethereum, OpenAI, and React communities for making this project possible.
+Built with love using open-source technologies. Special thanks to the Binome team for making this project possible.
+
 
