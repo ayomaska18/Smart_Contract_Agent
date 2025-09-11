@@ -30,9 +30,8 @@ class LoggingMiddleware(Middleware):
 
 load_dotenv()
 
-private_key = os.getenv('metamask_private_key')
-ethereum_sepolia_rpc = os.getenv('ethereum_sepolia_rpc')
-wallet_address = os.getenv('wallet_address')
+private_key = os.getenv('METAMASK_PRIVATE_KEY')
+ethereum_sepolia_rpc = os.getenv('ETHEREUM_SEPOLIA_RPC')
 
 solcx.install_solc('0.8.27')
 solcx.set_solc_version('0.8.27')
