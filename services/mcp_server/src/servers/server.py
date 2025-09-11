@@ -19,8 +19,6 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class LoggingMiddleware(Middleware):
-    """Middleware that logs all MCP operations."""
-    
     async def on_message(self, context: MiddlewareContext, call_next):
         """Called for all MCP messages."""
         print(f"Processing {context.method} from {context.source}")
@@ -132,39 +130,6 @@ async def generate_erc20_contract(
             "capped": capped
         }
     }
-
-# # Keep the old method for backward compatibility
-# @mcp.tool(
-#     name="generate_contract",
-#     description="Generate an ERC20 contract with custom name and symbol (legacy method)"
-# )
-# async def generate_contract(
-#     contract_name: Annotated[str, Field(
-#         description="Name of the contract class"
-#     )] = "MyToken",
-#     token_name: Annotated[str, Field(
-#         description="Display name of the token"
-#     )] = "MyToken",
-#     token_symbol: Annotated[str, Field(
-#         description="Token symbol"
-#     )] = "MTK",
-#     mintable: Annotated[bool, Field(
-#         description="Enable minting capability"
-#     )] = False,
-#     ownable: Annotated[bool, Field(
-#         description="Enable ownership controls"
-#     )] = False
-# ) -> dict:
-#     """Legacy ERC20 generation for backward compatibility."""
-    
-#     # Call the new generate_erc20_contract with mapped parameters
-#     return await generate_erc20_contract(
-#         contract_name=contract_name,
-#         token_name=token_name,
-#         token_symbol=token_symbol,
-#         mintable=mintable,
-#         ownable=ownable
-#     )
 
 @mcp.tool(
     name="generate_erc721_contract",
@@ -430,7 +395,6 @@ async def deploy_contract(
         account = w3.eth.account.from_key(private_key).address
         nonce = w3.eth.get_transaction_count(account)
 
-        # Use deployer address as initial owner if not specified
         owner_address = initial_owner
         if not owner_address:
             owner_address = account

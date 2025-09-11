@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Approval router for handling human-in-the-loop deployment approval workflow
-"""
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any

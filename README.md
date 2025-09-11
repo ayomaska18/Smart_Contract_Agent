@@ -1,33 +1,49 @@
-# Smart Contract Assistant
+# Graphite Smart Contract Assistant 
 
-An AI-powered smart contract development platform that combines a Next.js frontend, FastAPI backend, and MCP (Model Context Protocol) server for intelligent blockchain development assistance.
+An AI-powered smart contract development platform built on the **Graphite** event-driven AI agent framework. Features a Next.js frontend, FastAPI backend with ReAct agents, and MCP (Model Context Protocol) server for intelligent blockchain development assistance with wallet integration and approval workflows.
 
 ## Architecture
 
 The application follows a modern 3-tier architecture:
 
 ```
-Frontend (Next.js) → Backend API (FastAPI) → MCP Server (FastMCP)
-   
+Frontend (Next.js + Wagmi) → Backend API (FastAPI) → MCP Server (FastMCP)
+                  ↓                    ↓                      ↓
+            RainbowKit Wallet    ReAct Agents         Smart Contract Tools
+            User Approvals       Event Sourcing       Solidity Templates
+                  ↓                    ↓                      ↓
+            MetaMask/WalletConnect → PostgreSQL DB ← Blockchain (Sepolia)
 ```
 
 ### Components
 
-- **Frontend**: Next.js React application with real-time chat interface
-- **Backend**: FastAPI server with ReAct agent integration
-- **MCP Server**: Smart contract tools and blockchain utilities
-- **Database**: PostgreSQL for event sourcing and conversation history
-- **Framework**: Built on Grafi - an event-driven AI agent framework
+- **Frontend**: Next.js 14 React application with Wagmi/RainbowKit wallet integration
+- **Backend**: FastAPI server with ReAct agents, approval workflows, and event sourcing  
+- **MCP Server**: Smart contract generation, compilation, and deployment tools
+- **Database**: PostgreSQL for event sourcing, conversation history, and approval tracking
+- **Framework**: Built on **Graphite** - an event-driven AI agent framework
+- **Blockchain**: Ethereum Sepolia testnet integration with user wallet signing
 
 ## Features
 
--  **AI-Powered Contract Generation**: Create ERC20 & ERC721 tokens with natural language
--  **Smart Contract Compilation**: Automated Solidity compilation and validation  
--  **Blockchain Deployment**: Deploy contracts to Ethereum testnets
--  **Interactive Chat Interface**: Conversational AI with persistent context
--  **ReAct Agent**: Advanced reasoning with THOUGHT → ACTION → ANSWER flow
--  **Event Sourcing**: Complete audit trail and state recovery
--  **Docker Containerized**: Easy deployment and development
+### 🤖 AI Agent Capabilities
+- **ReAct Agent Architecture**: Advanced reasoning with THOUGHT → ACTION → OBSERVATION flow
+- **Natural Language Processing**: Create smart contracts with conversational prompts
+- **Context Awareness**: Persistent conversation history and tool result integration
+- **Error Recovery**: Automatic retry logic and fallback handling
+
+### 🔗 Blockchain Integration  
+- **Smart Contract Generation**: ERC20 & ERC721 tokens with advanced features
+- **Solidity Compilation**: Automated compilation with OpenZeppelin integration
+- **User Wallet Deployment**: Deploy contracts using connected MetaMask/WalletConnect
+- **Approval Workflows**: User confirmation for transactions with real-time status
+- **Testnet Support**: Ethereum Sepolia testnet integration
+
+### 💾 Enterprise Architecture
+- **Event Sourcing**: Complete audit trail and state recovery via PostgreSQL
+- **Structured Responses**: Type-safe API responses with Pydantic models  
+- **MCP Protocol**: Modular tool system for blockchain operations
+- **Docker Containerized**: Production-ready deployment configuration
 
 ##  Quick Start
 
@@ -36,12 +52,14 @@ Frontend (Next.js) → Backend API (FastAPI) → MCP Server (FastMCP)
 - Docker & Docker Compose
 - Node.js 18+ (for local development)
 - Python 3.13+ (for local development)
+- MetaMask or compatible Web3 wallet
+- Ethereum Sepolia testnet ETH (for deployments)
 
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/ayomaska18/Smart_Contract_Agent.git
-cd Smart_Contract_Agent
+git clone <your-repository-url>
+cd graphite_test
 ```
 
 ### 2. Environment Setup
@@ -112,7 +130,7 @@ docker-compose up --build -d
 
 2. **Install Node Dependencies**:
    ```bash
-   npm install
+   npm install  # Root level for OpenZeppelin contracts
    cd apps/frontend && npm install
    ```
 
@@ -120,7 +138,7 @@ docker-compose up --build -d
    ```bash
    # Backend (in terminal 1)
    cd apps/backend
-   uv run python api_server.py
+   uv run python main.py
    
    # Frontend (in terminal 2) 
    cd apps/frontend
@@ -128,7 +146,7 @@ docker-compose up --build -d
    
    # MCP Server (in terminal 3)
    cd services/mcp_server
-   uv run src/servers/server.py
+   uv run python src/servers/server.py
    ```
 
 ### Code Quality
@@ -151,20 +169,40 @@ pytest
 
 ```
 ├── apps/
-│   ├── backend/           # FastAPI backend
-│   │   ├── routers/       # API endpoints
-│   │   ├── agents/        # ReAct agent implementation
-│   │   └── memory/        # Conversation context
-│   └── frontend/          # Next.js frontend
-│       ├── src/components/# React components
-│       ├── src/services/ # API client
-│       └── src/types/    # TypeScript definitions
+│   ├── backend/                    # FastAPI backend
+│   │   ├── routers/               # API endpoints (chat, approval, wallet, etc.)
+│   │   ├── agents/                # ReAct agent implementation  
+│   │   ├── memory/                # Conversation context & event extraction
+│   │   ├── models/                # Pydantic response models
+│   │   ├── event_store/           # PostgreSQL event sourcing
+│   │   ├── prompts/               # Agent prompt templates
+│   │   ├── deps/                  # Dependency injection
+│   │   └── main.py               # FastAPI application entry point
+│   └── frontend/                  # Next.js 14 frontend
+│       ├── src/
+│       │   ├── components/        # React components (Chat, Wallet, Modals)
+│       │   ├── hooks/             # Custom React hooks (approval polling)
+│       │   ├── services/          # API client & wallet integration
+│       │   ├── types/             # TypeScript type definitions
+│       │   ├── config/            # Wagmi/RainbowKit configuration
+│       │   └── app/               # Next.js App Router pages
+│       ├── tailwind.config.js     # Tailwind CSS configuration
+│       └── package.json           # Frontend dependencies
 ├── services/
-│   └── mcp_server/       # Smart contract MCP server
-│       ├── src/tools/    # Blockchain tools
-│       └── src/contracts/# Solidity templates
-├── docker/               # Docker configurations
-└── docker-compose.yaml  # Service orchestration
+│   └── mcp_server/               # Smart contract MCP server
+│       ├── src/
+│       │   ├── servers/          # FastMCP server implementation
+│       │   ├── contracts/        # Solidity templates (ERC20, ERC721)
+│       │   ├── tools/            # Blockchain tools (deprecated)
+│       │   └── models/           # Tool parameter models
+│       └── requirements.txt      # MCP server dependencies
+├── docker/                       # Docker configurations
+├── .env.example                  # Environment variable template
+├── docker-compose.yaml          # Service orchestration
+├── pyproject.toml               # Python project configuration (uv)
+├── uv.lock                      # Python dependency lock file
+├── package.json                 # Root package.json (OpenZeppelin contracts)
+└── CLAUDE.md                    # Development instructions for LLMs
 ```
 
 ##  Configuration
@@ -189,62 +227,111 @@ pytest
 
 ##  Usage Examples
 
-### Creating an ERC20 Token
+### Creating an ERC20 Token with Natural Language
 
 ```
-User: Create an ERC20 token called "MyToken" with symbol "MTK"
+👤 User: Create an ERC20 token called "MyToken" with symbol "MTK" and 1 million initial supply
 
-AI Assistant:
-THOUGHT: User wants to create an ERC20 token. I need to use the MCP server to generate the contract.
+🤖 AI Assistant:
+💭 THOUGHT: User wants to create an ERC20 token. I need to use the generate_erc20_contract tool to create the contract.
 
-ACTION: generate_erc20_contract
-- Name: MyToken  
-- Symbol: MTK
-- Initial Supply: 1,000,000 tokens
+🔧 ACTION: generate_erc20_contract
+- contract_name: "MyToken"
+- token_name: "MyToken"  
+- token_symbol: "MTK"
+- initial_supply: 1000000
+- features: {"mintable": false, "burnable": false, "ownable": false}
 
-FINAL_ANSWER: I've created an ERC20 token contract for you!
+✅ OBSERVATION: Successfully generated ERC20 contract with Solidity code
 
-// ERC20 Token Contract Generated
+🎯 FINAL ANSWER: I've created your MyToken ERC20 contract! Here are the details:
+
+**📋 Contract Details:**
+- **Name**: MyToken (MTK)
+- **Initial Supply**: 1,000,000 tokens
+- **Features**: Standard ERC20 functionality
+- **Solidity Version**: ^0.8.27
+
+**💻 Generated Contract:**
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.27;
+
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 contract MyToken is ERC20 {
     constructor() ERC20("MyToken", "MTK") {
         _mint(msg.sender, 1000000 * 10**decimals());
     }
 }
-
-The contract has been generated and compiled successfully. Would you like me to deploy it to testnet?
 ```
 
-### Deploying a Contract
+Would you like me to compile and deploy this contract to Sepolia testnet?
+```
+
+### Deployment with User Wallet Approval
 
 ```
-User: Deploy the MyToken contract to Sepolia testnet
+👤 User: Yes, deploy it to Sepolia testnet
 
-AI Assistant: 
-THOUGHT: User wants to deploy the contract. I'll use the deployment tool with the configured wallet.
+🤖 AI Assistant:
+💭 THOUGHT: User wants to deploy the contract. I need to compile it first, then prepare a deployment transaction for the user's wallet to sign.
 
-ACTION: deploy_contract
-- Network: Sepolia
-- Contract: MyToken.sol  
-- Wallet: 0x8e8aA0a...
+🔧 ACTION: compile_contract → prepare_deployment_transaction
 
-FINAL_ANSWER: ✅ Contract deployed successfully!
+🔐 **Approval Required**: Please connect your wallet and approve the deployment transaction:
 
-📋 **Deployment Details:**
+**📋 Transaction Details:**
+- **Contract**: MyToken
+- **Network**: Sepolia Testnet  
+- **Estimated Gas**: 847,392
+- **Gas Price**: 20 Gwei
+- **Total Cost**: ~0.017 ETH
+
+[🔗 **Approve in Wallet**] ← *User clicks and signs transaction*
+
+✅ **Deployment Successful!**
+
+**📋 Deployment Results:**
 - **Contract Address**: `0x742d35Cc7abC5A2C7B8C1C3d3F0F8E2B91d4b3eF`
 - **Transaction Hash**: `0x5f9ea17d5b5f4e8c7a2c3b8e9f0a1d2c4e6f8a9b`
-- **Network**: Sepolia Testnet
+- **Block Number**: 18,500,000
+- **Deployer**: Your connected wallet
 - **Gas Used**: 847,392
-- **Deployer**: `0x8e8aA0a4312178E04553da4aF68Ec376c673d86E`
 
 🔗 **View on Etherscan**: https://sepolia.etherscan.io/address/0x742d35Cc7abC5A2C7B8C1C3d3F0F8E2B91d4b3eF
+
+Your MyToken contract is now live on Sepolia testnet! 🎉
 ```
+
+## 🛠️ Technology Stack
+
+### Backend
+- **Graphite Framework**: Event-driven AI agent architecture with event sourcing
+- **FastAPI**: High-performance Python web framework
+- **PostgreSQL**: Event store and conversation persistence
+- **FastMCP**: Model Context Protocol for modular tool integration
+- **Pydantic**: Type-safe data validation and serialization
+
+### Frontend  
+- **Next.js 14**: React framework with App Router
+- **Wagmi**: React hooks for Ethereum integration
+- **RainbowKit**: Wallet connection UI components
+- **Tailwind CSS**: Utility-first CSS framework
+- **TypeScript**: Type-safe JavaScript development
+
+### Blockchain
+- **OpenZeppelin**: Secure smart contract templates
+- **Solidity**: Smart contract programming language
+- **Web3.py**: Python Ethereum library
+- **Ethereum Sepolia**: Testnet for safe contract deployment
+
+### DevOps
+- **Docker**: Containerized development and deployment
+- **uv**: Fast Python package manager
+- **Ruff**: Python linter and formatter
 
 ## 🙏 Acknowledgments
 
-- **Graphite Framework**: Event-driven AI agent architecture
-- **FastMCP**: Model Context Protocol implementation
-- **OpenAI**: GPT models for AI responses
-- **OpenZeppelin**: Smart contract templates
-- **Next.js**: React framework for frontend
-- **FastAPI**: Python web framework for backend
+Built with love using open-source technologies. Special thanks to the Ethereum, OpenAI, and React communities for making this project possible.
 

@@ -1,11 +1,3 @@
-"""
-True ReAct Agent Implementation for Smart Contract Development
-
-This implements the proper ReAct pattern with explicit reasoning nodes,
-based on the working react_test.py architecture but with added sophistication
-for handling complex smart contract tasks like NFT creation.
-"""
-
 import os
 import sys
 import json
@@ -268,8 +260,7 @@ class TrueReActAssistant(Assistant):
             .publish_to(prepare_deployment_topic)
             .build()
         )
-        
-        # Human Response Handler - processes responses from InWorkflowInputTopic
+
         deployment_approval_node = (
             Node.builder()
             .name("deployment_approval_node")
@@ -290,8 +281,7 @@ class TrueReActAssistant(Assistant):
             .publish_to(broadcast_deployment_topic) 
             .build()
         )
-        
-        # Deployment Preparation Node - calls prepare_deployment_transaction MCP tool
+
         prepare_deployment_node = (
             Node.builder()
             .name("prepare_deployment_node")
@@ -305,8 +295,7 @@ class TrueReActAssistant(Assistant):
             .publish_to(deployment_request_topic)
             .build()
         )
-        
-        # Deployment Broadcast Node - calls broadcast_signed_transaction MCP tool  
+
         broadcast_deployment_node = (
             Node.builder()
             .name("broadcast_deployment_node")

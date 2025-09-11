@@ -105,34 +105,7 @@ class ApiService {
     }
   }
 
-  async broadcastSignedTransaction(signedTransactionHex: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    try {
-      console.log('Broadcasting signed transaction:', signedTransactionHex.substring(0, 20) + '...');
-      
-      const response = await this.axiosInstance.post('/api/transactions/broadcast', {
-        signed_transaction_hex: signedTransactionHex
-      });
-
-      console.log('Broadcast response:', response.data);
-      return response.data;
-
-    } catch (error: any) {
-      console.error('Transaction broadcast error:', error);
-      
-      if (error.response) {
-        const errorMessage = error.response.data?.error || error.message || 'Transaction broadcast failed';
-        return {
-          success: false,
-          error: `Broadcast Error: ${errorMessage}`
-        };
-      }
-      
-      return {
-        success: false,
-        error: 'Failed to broadcast transaction to network'
-      };
-    }
-  }
+  // Legacy broadcastSignedTransaction removed - now handled through approval flow
 
   async *simulateStreamingResponse(message: string): AsyncGenerator<string, void, unknown> {
     yield "THOUGHT: Backend connection failed, running in frontend fallback mode...";

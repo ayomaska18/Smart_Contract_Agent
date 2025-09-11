@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal, Union, Dict, Any
+from typing import Optional, List, Literal, Union, Dict
 from pydantic import BaseModel, Field
 
 
@@ -11,6 +11,10 @@ class ReasoningResponse(BaseModel):
     tool_call_reasoning: Optional[str] = Field(
         default=None,
         description="Specific reasoning for what tool to call and why"
+    )
+    tool_result: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Result from tool execution, if any"
     )
     confidence: float = Field(
         ge=0.0, le=1.0,

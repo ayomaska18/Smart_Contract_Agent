@@ -87,12 +87,12 @@ contract {{ CONTRACT_NAME }} is
 
     // View functions
     function getContractInfo() public view returns (
-        string memory name,
-        string memory symbol,
+        string memory tokenName,
+        string memory tokenSymbol,
         uint8 dec,
-        uint256 totalSup,
-        {% if capped %}uint256 cap,{% endif %}
-        {% if ownable %}address owner{% endif %}
+        uint256 totalSup
+        {% if capped %},uint256 cap{% endif %}
+        {% if ownable %},address contractOwner{% endif %}
     ) {
         return (
             name(),

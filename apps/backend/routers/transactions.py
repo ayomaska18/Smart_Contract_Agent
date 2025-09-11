@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Transaction router for handling blockchain transaction operations
-"""
-
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -30,9 +25,6 @@ class BroadcastTransactionResponse(BaseModel):
 
 @router.post("/broadcast", response_model=BroadcastTransactionResponse)
 async def broadcast_signed_transaction(request: BroadcastTransactionRequest, app_request: Request, assistant = Depends(get_assistant)):
-    """
-    Broadcast a signed transaction to the blockchain network using the MCP server
-    """
     try:
         if assistant is None:
             logger.error("Assistant not available - running in fallback mode")
@@ -116,9 +108,6 @@ async def broadcast_signed_transaction(request: BroadcastTransactionRequest, app
 
 @router.get("/status")
 async def get_transaction_status(tx_hash: str):
-    """
-    Get the status of a transaction by hash (placeholder for future implementation)
-    """
     return {
         "transaction_hash": tx_hash,
         "status": "pending",

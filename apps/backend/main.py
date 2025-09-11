@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Backend API Server for Smart Contract Assistant
-Separates the frontend from the Graphite agent and MCP server
-"""
-
 import os
 from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException

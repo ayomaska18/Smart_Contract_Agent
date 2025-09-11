@@ -26,7 +26,7 @@ const ChatContainer: React.FC = () => {
     transactionData?: any;
     approvalRequest?: any;
     mode?: 'transaction' | 'approval';
-  }>({ isOpen: false, transactionData: null, approvalRequest: null, mode: 'transaction' });
+  }>({ isOpen: false, transactionData: null, approvalRequest: null, mode: 'approval' });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Approval polling hook
@@ -359,51 +359,6 @@ Your smart contract has been successfully deployed and is now live on the blockc
     }
   };
 
-  const handleTransactionConfirmed = async () => {
-    // Send confirmation back to the agent to proceed with user wallet deployment
-    const confirmMessage = `Yes, I confirm the deployment. Please proceed with my wallet.`;
-    
-    // Add user message with confirmation
-    const userMessage: Message = {
-      id: generateMessageId(),
-      role: 'user',
-      content: confirmMessage,
-      timestamp: new Date(),
-    };
-
-    setChatState(prev => ({
-      ...prev,
-      messages: [...prev.messages, userMessage],
-      isLoading: true,
-    }));
-
-    try {
-      const response = await apiService.sendMessage({
-        message: confirmMessage,
-        conversationId: chatState.conversationId ?? undefined,
-      });
-
-      if (response.success && response.data) {
-        const assistantMessage: Message = {
-          id: generateMessageId(),
-          role: 'assistant',
-          content: response.data.response,
-          timestamp: new Date(),
-        };
-
-        setChatState(prev => ({
-          ...prev,
-          messages: [...prev.messages, assistantMessage],
-          isLoading: false,
-        }));
-      }
-    } catch (err) {
-      console.error('Error confirming deployment:', err);
-      setError('Failed to confirm deployment');
-      setChatState(prev => ({ ...prev, isLoading: false }));
-    }
-  };
-
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
 
@@ -669,12 +624,11 @@ Your smart contract has been successfully deployed and is now live on the blockc
           isOpen: false, 
           transactionData: null, 
           approvalRequest: null, 
-          mode: 'transaction' 
+          mode: 'approval' 
         })}
         transactionData={transactionModal.transactionData}
         approvalRequest={transactionModal.approvalRequest}
         mode={transactionModal.mode}
-        onConfirm={handleTransactionConfirmed}
         onApprovalSubmit={handleApprovalSubmit}
       />
     </div>

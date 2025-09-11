@@ -1,7 +1,3 @@
-"""
-Pydantic models for MCP tool parameters to ensure strict OpenAI compatibility.
-"""
-
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 

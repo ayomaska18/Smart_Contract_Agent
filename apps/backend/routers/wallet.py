@@ -26,9 +26,6 @@ class WalletResponse(BaseModel):
 
 @router.post("/connect", response_model=WalletResponse)
 async def connect_wallet(request: WalletConnectRequest):
-    """
-    Store user's wallet address for the conversation session
-    """
     try:
         wallet_address = request.wallet_address.lower() 
         conversation_id = request.conversation_id or "default"
@@ -54,9 +51,6 @@ async def connect_wallet(request: WalletConnectRequest):
 
 @router.post("/disconnect", response_model=WalletResponse)
 async def disconnect_wallet(request: WalletDisconnectRequest):
-    """
-    Remove user's wallet address from the conversation session
-    """
     try:
         conversation_id = request.conversation_id or "default"
         
@@ -80,9 +74,6 @@ async def disconnect_wallet(request: WalletDisconnectRequest):
 
 @router.get("/status", response_model=WalletResponse)
 async def get_wallet_status(conversation_id: Optional[str] = None):
-    """
-    Get the current wallet status for a conversation
-    """
     try:
         session_id = conversation_id or "default"
         wallet_address = wallet_sessions.get(session_id)
@@ -104,8 +95,4 @@ async def get_wallet_status(conversation_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Failed to get wallet status: {str(e)}")
 
 def get_wallet_for_conversation(conversation_id: str) -> Optional[str]:
-    """
-    Utility function to get wallet address for a conversation
-    Used by other parts of the backend (like the agent)
-    """
     return wallet_sessions.get(conversation_id)

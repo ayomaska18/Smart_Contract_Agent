@@ -1,7 +1,3 @@
-"""
-Contract router for smart contract specific operations
-"""
-
 import uuid
 import sys
 import os
@@ -13,6 +9,8 @@ from pydantic import BaseModel
 
 from deps.assistant import get_assistant
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
 
 class ERC20Request(BaseModel):
@@ -32,10 +30,7 @@ class ContractResponse(BaseModel):
 
 @router.post("/erc20/generate", response_model=ContractResponse)
 async def generate_erc20_contract(request: ERC20Request, assistant = Depends(get_assistant)):
-    """Generate an ERC20 contract with specified parameters"""
 
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
     try:
         contract_id = uuid.uuid4().hex
         
@@ -120,7 +115,6 @@ contract {request.name.replace(' ', '')} is ERC20 {{
 
 @router.post("/compile")
 async def compile_contract(solidity_code: str, assistant = Depends(get_assistant)):
-    """Compile Solidity code using MCP tools"""
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     try:
@@ -169,7 +163,6 @@ contract MyToken is ERC20 {
 
 @router.get("/templates/erc721")
 async def get_erc721_template():
-    """Get a basic ERC721 contract template"""
     template = """// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 

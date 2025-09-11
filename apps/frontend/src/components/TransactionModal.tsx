@@ -32,9 +32,8 @@ interface TransactionModalProps {
   onClose: () => void;
   transactionData?: TransactionData | null;
   approvalRequest?: ApprovalRequest | null;
-  onConfirm?: () => void;
   onApprovalSubmit?: (approvalId: string, approved: boolean, signedTxHex?: string, rejectionReason?: string) => Promise<boolean>;
-  mode?: 'transaction' | 'approval'; // New prop to distinguish modes
+  mode?: 'transaction' | 'approval'; // 'transaction' mode is deprecated, only 'approval' should be used
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -42,9 +41,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onClose,
   transactionData,
   approvalRequest,
-  onConfirm,
   onApprovalSubmit,
-  mode = 'transaction',
+  mode = 'approval', // Default to approval mode since transaction mode is deprecated
 }) => {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -161,40 +159,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         }
 
       } else {
-        // Direct transaction mode (legacy)
-        setSignStatus('broadcasting');
-        console.log('Transaction data received:', currentTransactionData);
-        
-        // Prepare transaction for sending
-        const txToSend = {
-          account: address as `0x${string}`,
-          to: currentTransactionData.to as `0x${string}` | undefined,
-          data: currentTransactionData.data as `0x${string}`,
-          gas: BigInt(currentTransactionData.gas || currentTransactionData.estimated_gas || 2000000),
-          gasPrice: BigInt(currentTransactionData.gasPrice || (currentTransactionData.gas_price_gwei ? Math.floor(currentTransactionData.gas_price_gwei * 1e9) : 10e9)),
-          nonce: currentTransactionData.nonce || undefined,
-          value: BigInt(currentTransactionData.value || 0),
-        };
-
-        console.log('Sending transaction:', txToSend);
-
-        // Send transaction directly (browser wallets handle signing internally)
-        const txHash = await walletClient.sendTransaction(txToSend);
-        console.log('Transaction sent, hash:', txHash);
-
-        setSignStatus('success');
-        console.log('Transaction successful:', txHash);
-        
-        // Call the original onConfirm callback if provided
-        if (onConfirm) {
-          onConfirm();
-        }
-        
-        // Close modal after a short delay
-        setTimeout(() => {
-          onClose();
-          setSignStatus('idle');
-        }, 2000);
+        // This should never happen - all transactions should go through approval flow
+        console.error('❌ Direct transaction mode triggered - this is deprecated');
+        throw new Error('Invalid transaction mode. All transactions must go through approval flow.');
       }
 
     } catch (error: any) {

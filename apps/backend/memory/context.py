@@ -1,11 +1,16 @@
+import logging
+
 from grafi.common.models.message import Message
 from grafi.common.containers.container import container
 from models.agent_responses import FinalAgentResponse, ReasoningResponse, DeploymentApprovalRequest, ApprovalResponse
 from routers.wallet import get_wallet_for_conversation
 import json
+from fastmcp.server.middleware import Middleware, MiddlewareContext
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def extract_structured_content(msg: Message) -> dict:
-    """Extract both content and structured data from message"""
     result = {
         "text_content": None,
         "structured_data": None,
@@ -30,7 +35,6 @@ def extract_structured_content(msg: Message) -> dict:
             result["text_content"] = f"Approval {msg.content.approval_status}: {msg.content.reasoning}"
             result["type"] = "approval_response"
         else:
-            # Fallback to string content
             result["text_content"] = str(msg.content)
             result["type"] = "text"
     
@@ -43,7 +47,6 @@ def extract_and_dedupe_messages(events) -> list[Message]:
         if hasattr(event, 'input_data'):
             if isinstance(event.input_data, list):
                 for item in event.input_data:
-                    # Handle ConsumeFromTopicEvent
                     if hasattr(item, 'data') and isinstance(item.data, list):
                         for msg in item.data:
                             if isinstance(msg, Message):
@@ -92,12 +95,17 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
     # Extract and deduplicate messages
     messages = extract_and_dedupe_messages(events)
     
+    if messages:
+        logger.info(f"Extracted messages: {messages}")
+        logger.info(f"type of message {type(messages[0])}")
+    
     # Build conversation flow
     conversation_flow = []
     pending_tool_call = None
-    latest_tool_results = {}  # Store latest successful tool results
+    latest_tool_results = {}  
     
     for msg in messages:
+        
         if msg.role == "user":
             conversation_flow.append(msg)
             
@@ -148,6 +156,7 @@ def get_conversation_context(conversation_id: str) -> list[Message]:
             # Tool response received - store for context but don't add to conversation
             # The structured final response will handle user communication
             tool_name = pending_tool_call or "unknown_tool"
+            logger.info(f"tool found: {msg}")
             
             try:
                 tool_response = json.loads(msg.content)

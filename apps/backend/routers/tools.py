@@ -8,15 +8,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, List, Any
 from deps.assistant import get_assistant
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 @router.get("/")
 async def list_tools(assistant = Depends(get_assistant)):
-    """List available MCP tools"""
-
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-    
     try:
         if not assistant:
             return {
@@ -87,9 +84,6 @@ async def get_tool_info(tool_name: str, assistant = Depends(get_assistant)):
 
 @router.post("/{tool_name}/invoke")
 async def invoke_tool(tool_name: str, parameters: Dict[str, Any], assistant = Depends(get_assistant)):
-    """Directly invoke a specific MCP tool"""
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     try:
         if not assistant:
             raise HTTPException(status_code=503, detail="Assistant not connected to MCP server")
@@ -108,9 +102,6 @@ async def invoke_tool(tool_name: str, parameters: Dict[str, Any], assistant = De
 
 @router.get("/status/mcp")
 async def mcp_status(assistant = Depends(get_assistant)):
-    """Get MCP connection status and diagnostics"""
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     return {
         "mcp_connected": assistant is not None,
         "server_url": "http://localhost:8081/mcp/",
