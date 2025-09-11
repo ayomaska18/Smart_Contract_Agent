@@ -1,4 +1,5 @@
 services:
+  # Postgres
   postgres:
     image: postgres:15
     container_name: postgres15
@@ -11,7 +12,8 @@ services:
     ports:
       - "5432:5432"
     command: [ "postgres", "-c", "listen_addresses=*"]
-    
+  
+  # Pgadmin
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
@@ -23,7 +25,7 @@ services:
     depends_on:
       - postgres
     
-  # MCP Server (Smart Contract Tools)
+  # MCP Server 
   mcp_server:
     build:
       context: .
@@ -41,7 +43,7 @@ services:
     networks:
       - graphite_network
   
-  # Backend API (FastAPI)
+  # Backend 
   backend:
     build:
       context: .
@@ -61,13 +63,13 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=postgres
-      - PHOENIX_ENDPOINT=http://phoenix:4317
-      - OTEL_EXPORTER_OTLP_ENDPOINT=phoenix:4317
+      - PHOENIX_ENDPOINT=${PHOENIX_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
     networks:
       - graphite_network
     command: sh -c "sleep 10 && uv run uvicorn main:app --host 0.0.0.0 --port 8000"
   
-  # Frontend (Next.js)
+  # Frontend 
   frontend:
     build:
       context: .
@@ -108,6 +110,7 @@ services:
   #   networks:
   #     - graphite_network
 
+  # Phoenix
   phoenix:
     image: arizephoenix/phoenix:latest
     ports:
