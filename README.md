@@ -7,12 +7,7 @@ An AI-powered smart contract development platform built on the **Graphite** even
 The application follows a modern 3-tier architecture:
 
 ```
-Frontend (Next.js + Wagmi) → Backend API (FastAPI) → MCP Server (FastMCP)
-                  ↓                    ↓                      ↓
-            RainbowKit Wallet    ReAct Agents         Smart Contract Tools
-            User Approvals       Event Sourcing       Solidity Templates
-                  ↓                    ↓                      ↓
-            MetaMask/WalletConnect → PostgreSQL DB ← Blockchain (Currently Sepolia only)
+![workflow](assets/smart_contract_workflow.png)
 ```
 
 ### Components
