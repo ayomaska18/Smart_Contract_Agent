@@ -6,9 +6,7 @@ An AI-powered smart contract development platform built on the **Graphite** even
 
 The application follows a modern 3-tier architecture:
 
-```
 ![workflow](assets/smart_contract_workflow.png)
-```
 
 ### Components
 
