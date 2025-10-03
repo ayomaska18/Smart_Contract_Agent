@@ -54,7 +54,6 @@ async def create_react_assistant():
     try:
         print("Building MCP tool...")
         mcp_tool = await MCPTool.builder().connections(mcp_config).a_build()
-        mcp_function_spec = mcp_tool.get_function_specs()
         print("MCP tool built successfully")
         
         print("Building assistant...")
@@ -63,7 +62,6 @@ async def create_react_assistant():
             .model(os.getenv('OPENAI_MODEL', 'gpt-4o'))
             .api_key(os.getenv("OPENAI_API_KEY", ""))
             .function_call_tool(mcp_tool)
-            # .function_specs(mcp_function_spec)
             .build()
         )
         print("Assistant built successfully")

@@ -55,8 +55,6 @@ class TrueReActAssistant(Assistant):
     api_key: Optional[str] = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
     model: str = Field(default=lambda: os.getenv('OPENAI_MODEL', 'gpt-4'))
     function_call_tool: Optional[MCPTool] = Field(default=None)
-    system_prompt: str = Field(default=REASONING_PROMPT)
-    # function_specs: Optional[List[FunctionSpec]] = Field(default=None)
 
     @classmethod
     def builder(cls):
@@ -75,9 +73,9 @@ class TrueReActAssistant(Assistant):
                 "Use TrueReActAssistant.builder().function_call_tool(...).build()"
             )
 
-        user_input_topic = InputTopic(name="agent_input_topic")
+        agent_input_topic = InputTopic(name="agent_input_topic")
 
-        final_output_topic = OutputTopic(
+        agent_output_topic = OutputTopic(
             name="agent_output_topic",
         )
 
@@ -95,7 +93,7 @@ class TrueReActAssistant(Assistant):
         )
   
         action_topic = Topic(
-            name="action_call_topic",
+            name="action_topic",
             condition=lambda msgs: any(
                 hasattr(msg, 'content') and
                 isinstance(msg.content, str) and
@@ -106,26 +104,26 @@ class TrueReActAssistant(Assistant):
             )
         )
 
-        tool_call_topic = Topic(name="tool_call_topic")
+        action_output_topic = Topic(name="action_output_topic")
 
-        tool_result_topic = Topic(name="tool_result_topic")
+        tool_execution_output_topic = Topic(name="tool_execution_output_topic")
 
         deployment_approval_topic = InWorkflowInputTopic(
             name = "deployment_approval_topic"
         )
 
-        deployment_request_topic = InWorkflowOutputTopic(
-            name= "deployment_request_topic", 
-            paired_in_workflow_input_topic_name ="deployment_approval_input"
+        prepare_deployment_output_topic = InWorkflowOutputTopic(
+            name= "prepare_deployment_output_topic", 
+            paired_in_workflow_input_topic_name ="prepare_deployment_output_topic"
         )
         
-        approved_deployment_topic = Topic(
-            name="approved_deployment_topic",
+        broadcast_deployment_output_topic = Topic(
+            name="broadcast_deployment_output_topic",
         )
         
         # New topics for MCP tool execution in deployment flow
-        prepare_deployment_topic = Topic(name="prepare_deployment_topic")
-        broadcast_deployment_topic = Topic(name="deployment_prepared_topic")
+        deployment_request_output_topic = Topic(name="deployment_request_output_topic")
+        deployment_approval_output_topic = Topic(name="deployment_approval_output_topic")
 
         deployment_topic = Topic(
             name="deployment_topic",
@@ -138,8 +136,21 @@ class TrueReActAssistant(Assistant):
                 for msg in msgs
             )
         )
-
-        reasoning_node_openai_tool = (
+        
+        reasoning_node = (
+            Node.builder()
+            .name("reasoning_node")
+            .type("reasoning_node")
+            .subscribe(
+                SubscriptionBuilder()
+                .subscribed_to(agent_input_topic)
+                .or_()
+                .subscribed_to(tool_execution_output_topic)
+                .or_()
+                .subscribed_to(broadcast_deployment_output_topic) 
+                .build()
+            )
+            .tool(
                 OpenAITool.builder()
                 .name("reasoning_llm")
                 .api_key(self.api_key)
@@ -149,23 +160,6 @@ class TrueReActAssistant(Assistant):
                     "response_format": ReasoningResponse
                 })
                 .build()
-        )
-        
-        reasoning_node = (
-            Node.builder()
-            .name("reasoning_node")
-            .type("reasoning_node")
-            .subscribe(
-                SubscriptionBuilder()
-                .subscribed_to(user_input_topic)
-                .or_()
-                .subscribed_to(tool_result_topic)
-                .or_()
-                .subscribed_to(approved_deployment_topic) 
-                .build()
-            )
-            .tool(
-                reasoning_node_openai_tool
             )
             .publish_to(reasoning_output_topic)
             .publish_to(deployment_topic)
@@ -197,7 +191,7 @@ class TrueReActAssistant(Assistant):
                 .build()
             )
             .tool(action_node_openai_tool)
-            .publish_to(tool_call_topic)
+            .publish_to(action_output_topic)
             .build()
         )
 
@@ -207,11 +201,11 @@ class TrueReActAssistant(Assistant):
             .type("tool_execution_node")
             .subscribe(
                 SubscriptionBuilder()
-                .subscribed_to(tool_call_topic)
+                .subscribed_to(action_output_topic)
                 .build()
             )
             .tool(self.function_call_tool)
-            .publish_to(tool_result_topic)
+            .publish_to(tool_execution_output_topic)
             .build()
         )
 
@@ -235,7 +229,7 @@ class TrueReActAssistant(Assistant):
                 })
                 .build()
             )
-            .publish_to(final_output_topic)
+            .publish_to(agent_output_topic)
             .build()
         )
         
@@ -257,7 +251,7 @@ class TrueReActAssistant(Assistant):
                 .system_message(DEPLOYMENT_REQUEST_PROMPT)
                 .build()
             )
-            .publish_to(prepare_deployment_topic)
+            .publish_to(deployment_request_output_topic)
             .build()
         )
 
@@ -278,7 +272,7 @@ class TrueReActAssistant(Assistant):
                 .system_message(DEPLOYMENT_APPROVAL_PROMPT)
                 .build()
             )
-            .publish_to(broadcast_deployment_topic) 
+            .publish_to(deployment_approval_output_topic) 
             .build()
         )
 
@@ -288,11 +282,11 @@ class TrueReActAssistant(Assistant):
             .type("prepare_deployment_node")
             .subscribe(
                 SubscriptionBuilder()
-                .subscribed_to(prepare_deployment_topic)
+                .subscribed_to(deployment_request_output_topic)
                 .build()
             )
             .tool(self.function_call_tool)  
-            .publish_to(deployment_request_topic)
+            .publish_to(prepare_deployment_output_topic)
             .build()
         )
 
@@ -302,11 +296,11 @@ class TrueReActAssistant(Assistant):
             .type("broadcast_deployment_node")
             .subscribe(
                 SubscriptionBuilder()
-                .subscribed_to(broadcast_deployment_topic)
+                .subscribed_to(deployment_approval_output_topic)
                 .build()
             )
             .tool(self.function_call_tool)  
-            .publish_to(approved_deployment_topic)  
+            .publish_to(broadcast_deployment_output_topic)  
             .build()
         )
         
@@ -337,12 +331,4 @@ class TrueReActAssistantBuilder(AssistantBaseBuilder):
 
     def function_call_tool(self, function_call_tool):
         self.kwargs["function_call_tool"] = function_call_tool
-        return self
-
-    # def function_specs(self, function_specs: List[FunctionSpec]):
-    #     self.kwargs["function_specs"] = function_specs
-    #     return self
-
-    def system_prompt(self, system_prompt: str):
-        self.kwargs["system_prompt"] = system_prompt
         return self
